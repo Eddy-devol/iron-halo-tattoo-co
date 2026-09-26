@@ -1,0 +1,15 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "npm run build": true,
+        "npm run lint": true,
+        "npm install": true,
+        "New-Item": true,
+        "Out-Null": true,
+        "npm run db:test:verify": true,
+        "npm run db:test:status": true,
+        "npx prisma": true,
+        "docker.exe": true,
+        "npm run test:integration": true,
+        "npm run test:e2e": true
+    }
+}

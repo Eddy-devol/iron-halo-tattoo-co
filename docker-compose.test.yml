@@ -1,0 +1,15 @@
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: iron-halo-postgres-test
+    environment:
+      POSTGRES_DB: iron_halo_test
+      POSTGRES_USER: iron_halo_test
+      POSTGRES_PASSWORD: iron_halo_test_only
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iron_halo_test -d iron_halo_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
