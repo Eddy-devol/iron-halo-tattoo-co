@@ -7,7 +7,12 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/admin/login", request.url));
     }
   }
-  return NextResponse.next();
+  const response = NextResponse.next();
+  if (/^\/admin\/bookings\/[^/]+\/print(?:\/|$)/.test(request.nextUrl.pathname)) {
+    response.headers.set("Cache-Control", "private, no-store, max-age=0");
+    response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+  }
+  return response;
 }
 
 export const config = { matcher: ["/admin/:path*"] };

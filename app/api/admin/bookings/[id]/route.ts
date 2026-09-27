@@ -38,9 +38,26 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         size: true,
         colorPreference: true,
         preferredTimeframe: true,
+        artistName: true,
         budget: true,
         additionalNotes: true,
         status: true,
+        consentRecord: {
+          select: {
+            legalName: true,
+            dateOfBirth: true,
+            addressLine1: true,
+            city: true,
+            state: true,
+            postalCode: true,
+            governmentIdType: true,
+            governmentIdLastFour: true,
+            identificationVerifiedAt: true,
+            verifiedBy: { select: { name: true } },
+            status: true,
+            completedAt: true,
+          },
+        },
         createdAt: true,
         updatedAt: true,
         referenceImages: {
@@ -104,9 +121,17 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         size: booking.size,
         colorPreference: booking.colorPreference,
         preferredTimeframe: booking.preferredTimeframe,
+        artistName: booking.artistName,
         budget: booking.budget,
         additionalNotes: booking.additionalNotes,
         status: booking.status,
+        consentRecord: booking.consentRecord ? {
+          ...booking.consentRecord,
+          dateOfBirth: booking.consentRecord.dateOfBirth?.toISOString() ?? null,
+          identificationVerifiedAt: booking.consentRecord.identificationVerifiedAt?.toISOString() ?? null,
+          verifiedByName: booking.consentRecord.verifiedBy?.name ?? null,
+          completedAt: booking.consentRecord.completedAt?.toISOString() ?? null,
+        } : null,
         createdAt: booking.createdAt.toISOString(),
         updatedAt: booking.updatedAt.toISOString(),
         referenceImages,
@@ -128,7 +153,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
             : [];
         }),
       },
-    });
+    }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     console.error("ADMIN_BOOKING_DETAIL_FAILED", { errorCategory: safeErrorCategory(error) });
     return NextResponse.json({ error: "Unable to load booking details." }, { status: 500 });

@@ -69,6 +69,15 @@ Resend remains optional for accepting bookings. Booking data is persisted before
 
 The Archive uses the existing private S3-compatible storage. Public image delivery resolves only published artwork slugs and never returns storage keys or credentials. Admin previews require the existing database-backed admin session.
 
+### Client documents and manual payment plans
+
+- Admin booking detail includes client record/consent tracking, payment plans and a manual payment ledger.
+- Private print routes: `/admin/bookings/[id]/print/confirmation`, `/consent`, `/payment-plan`, `/payment/[paymentId]`, and `/client-packet`. Each route requires the admin session; none are public client links.
+- A payment plan uses decimal currency values and a custom due-date/installment schedule. The current ledger supports valid ISO currencies with two fractional digits. Payments are recorded manually, tied to an installment, and cannot exceed that installment or the plan total. Balances/status are calculated from saved payment rows. Recording or completing payment does not change booking or consent status.
+- The consent page is a custom studio document, not an official Texas DSHS form. The studio must review and finalize consent wording and operational policy with qualified counsel before use. `TATTOO_CONSENT_TEXT` and `TATTOO_PAYMENT_PLAN_AGREEMENT` are optional server-side configuration values; if absent, the print form clearly indicates that the content is not ready for client signature.
+- Client records support DOB, address, ID type, and an optional ID last-four reference; the application does not store full government ID numbers. Admins explicitly record in-person ID verification and completion after confirming the physical signed form. Printing does not mark consent completed.
+- Before deployment, apply the additive migration with `npx prisma migrate deploy` only after verifying the intended database target. Do not use `prisma migrate reset`; local route verification uses only the isolated test database.
+
 ## Booking flow
 
 The form accepts client details, project description, style, placement, scale, color preference, timeframe, and optional reference images. Booking requests persist through Prisma; reference images are validated and stored as private S3-compatible objects with metadata in PostgreSQL. The public API returns only a human-friendly `IH-YYYY-XXXXXX` reference.

@@ -11,6 +11,10 @@ const requiredTables = [
   "AuditLog",
   "Appointment",
   "ArchiveArtwork",
+  "PaymentPlan",
+  "PaymentInstallment",
+  "Payment",
+  "TattooConsentRecord",
 ];
 const expectedIdempotencyStatuses = ["COMPLETED", "PROCESSING"];
 
@@ -58,6 +62,32 @@ async function main() {
   const missingColumns = idempotencyColumns.filter((column) => !columns.has(column));
   if (missingColumns.length) throw new Error(`BookingRequest is missing expected idempotency columns: ${missingColumns.join(", ")}`);
   console.info("BookingRequest idempotency columns: verified");
+  if (!columns.has("artistName")) throw new Error("BookingRequest artistName column is missing.");
+  console.info("BookingRequest artist assignment field: verified");
+
+  const documentColumnRows = await prisma.$queryRaw`
+    SELECT table_name AS "tableName", column_name AS name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name IN ('PaymentPlan', 'PaymentInstallment', 'Payment', 'TattooConsentRecord')
+  `;
+  const documentColumns = new Map();
+  for (const row of documentColumnRows) {
+    if (!documentColumns.has(row.tableName)) documentColumns.set(row.tableName, new Set());
+    documentColumns.get(row.tableName).add(row.name);
+  }
+  const expectedDocumentColumns = {
+    PaymentPlan: ["bookingRequestId", "totalAmount", "currency", "status", "installmentCount"],
+    PaymentInstallment: ["paymentPlanId", "installmentNumber", "dueDate", "amount"],
+    Payment: ["paymentPlanId", "installmentId", "amount", "balanceAfter", "source", "recordedById"],
+    TattooConsentRecord: ["bookingRequestId", "dateOfBirth", "governmentIdType", "governmentIdLastFour", "status", "consentTextSnapshot"],
+  };
+  for (const [tableName, expected] of Object.entries(expectedDocumentColumns)) {
+    const actual = documentColumns.get(tableName) || new Set();
+    const missing = expected.filter((column) => !actual.has(column));
+    if (missing.length) throw new Error(`${tableName} is missing document/payment fields: ${missing.join(", ")}`);
+  }
+  console.info("Payment and consent document fields: verified");
 
   const archiveColumnRows = await prisma.$queryRaw`
     SELECT column_name AS name

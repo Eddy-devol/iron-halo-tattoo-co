@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BookingStatus } from "@prisma/client";
 import { FormEvent, useEffect, useState } from "react";
 import AdminHeader from "@/components/admin/AdminHeader";
+import AdminBookingDocumentsAndPayments from "@/components/admin/AdminBookingDocumentsAndPayments";
 
 const bookingStatuses = Object.values(BookingStatus);
 
@@ -19,11 +20,26 @@ type BookingDetailData = {
   size: string;
   colorPreference: string | null;
   preferredTimeframe: string | null;
+  artistName: string | null;
   budget: string | null;
   additionalNotes: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;
+  consentRecord: {
+    legalName: string | null;
+    dateOfBirth: string | null;
+    addressLine1: string | null;
+    city: string | null;
+    state: string | null;
+    postalCode: string | null;
+    governmentIdType: string | null;
+    governmentIdLastFour: string | null;
+    identificationVerifiedAt: string | null;
+    verifiedByName: string | null;
+    status: "NOT_COMPLETED" | "COMPLETED";
+    completedAt: string | null;
+  } | null;
   notes: Array<{
     id: string;
     body: string;
@@ -299,6 +315,15 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
                 </ul>
               )}
             </section>
+
+            <AdminBookingDocumentsAndPayments
+              bookingId={booking.id}
+              fullName={booking.fullName}
+              email={booking.email}
+              phone={booking.phone}
+              artistName={booking.artistName}
+              consentRecord={booking.consentRecord}
+            />
           </>
         ) : null}
       </div>
