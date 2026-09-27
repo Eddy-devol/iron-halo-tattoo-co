@@ -47,18 +47,36 @@ enum PaymentPlanStatus {
   PENDING
   PARTIALLY_PAID
   PAID
+  ACTIVE
+  COMPLETED
   CANCELLED
+}
+
+enum PaymentFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum PaymentInstallmentStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
 }
 
 enum PaymentMethod {
   CASH
   CARD
   BANK_TRANSFER
+  MPESA
   OTHER
 }
 
 enum PaymentSource {
   MANUAL
+  DEPOSIT
 }
 
 enum ConsentStatus {
@@ -206,9 +224,12 @@ model PaymentPlan {
   id               String               @id @default(uuid()) @db.Uuid
   bookingRequestId String               @unique @db.Uuid
   totalAmount      Decimal              @db.Decimal(12, 2)
+  legacyInitialAmount Decimal            @default(0) @map("initialAmount") @db.Decimal(12, 2)
   currency         String               @db.VarChar(3)
   status           PaymentPlanStatus    @default(PENDING)
+  frequency        PaymentFrequency     @default(CUSTOM)
   installmentCount Int
+  firstDueDate     DateTime?            @db.Date
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   bookingRequest   BookingRequest       @relation(fields: [bookingRequestId], references: [id], onDelete: Cascade)
@@ -219,12 +240,13 @@ model PaymentPlan {
 }
 
 model PaymentInstallment {
-  id                String      @id @default(uuid()) @db.Uuid
-  paymentPlanId     String      @db.Uuid
+  id                String                   @id @default(uuid()) @db.Uuid
+  paymentPlanId     String                   @db.Uuid
   installmentNumber Int
-  dueDate           DateTime    @db.Date
-  amount            Decimal     @db.Decimal(12, 2)
-  paymentPlan       PaymentPlan @relation(fields: [paymentPlanId], references: [id], onDelete: Cascade)
+  dueDate           DateTime                 @db.Date
+  amount            Decimal                  @db.Decimal(12, 2)
+  status            PaymentInstallmentStatus @default(PENDING)
+  paymentPlan       PaymentPlan              @relation(fields: [paymentPlanId], references: [id], onDelete: Cascade)
   payments          Payment[]
 
   @@unique([paymentPlanId, installmentNumber])
@@ -234,7 +256,7 @@ model PaymentInstallment {
 model Payment {
   id            String             @id @default(uuid()) @db.Uuid
   paymentPlanId String             @db.Uuid
-  installmentId String             @db.Uuid
+  installmentId String?            @db.Uuid
   recordedById  String             @db.Uuid
   receiptNumber String             @unique
   amount        Decimal            @db.Decimal(12, 2)
@@ -247,7 +269,7 @@ model Payment {
   notes         String?
   createdAt     DateTime           @default(now())
   paymentPlan   PaymentPlan        @relation(fields: [paymentPlanId], references: [id], onDelete: Cascade)
-  installment   PaymentInstallment @relation(fields: [installmentId], references: [id], onDelete: Cascade)
+  installment   PaymentInstallment? @relation(fields: [installmentId], references: [id], onDelete: Cascade)
   recordedBy    User               @relation("PaymentRecordedBy", fields: [recordedById], references: [id], onDelete: Restrict)
 
   @@index([paymentPlanId, paidAt])

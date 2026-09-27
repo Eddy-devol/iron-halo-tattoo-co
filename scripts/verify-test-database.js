@@ -79,8 +79,8 @@ async function main() {
     documentColumns.get(row.tableName).add(row.name);
   }
   const expectedDocumentColumns = {
-    PaymentPlan: ["bookingRequestId", "totalAmount", "currency", "status", "installmentCount"],
-    PaymentInstallment: ["paymentPlanId", "installmentNumber", "dueDate", "amount"],
+    PaymentPlan: ["bookingRequestId", "totalAmount", "currency", "status", "frequency", "installmentCount", "firstDueDate"],
+    PaymentInstallment: ["paymentPlanId", "installmentNumber", "dueDate", "amount", "status"],
     Payment: ["paymentPlanId", "installmentId", "amount", "balanceAfter", "source", "recordedById"],
     TattooConsentRecord: ["bookingRequestId", "dateOfBirth", "governmentIdType", "governmentIdLastFour", "status", "consentTextSnapshot"],
   };
@@ -145,7 +145,7 @@ async function main() {
     JOIN pg_enum e ON e.enumtypid = t.oid
     JOIN pg_namespace n ON n.oid = t.typnamespace
     WHERE n.nspname = 'public'
-      AND t.typname IN ('BookingStatus', 'BookingIdempotencyStatus')
+      AND t.typname IN ('BookingStatus', 'BookingIdempotencyStatus', 'PaymentPlanStatus', 'PaymentFrequency', 'PaymentInstallmentStatus')
     GROUP BY t.typname
   `;
   const enums = new Map(enumRows.map(({ name, labels }) => [name, labels]));
@@ -155,6 +155,16 @@ async function main() {
     throw new Error("BookingIdempotencyStatus enum is missing expected labels.");
   }
   console.info("Booking enums and idempotency labels: verified");
+  const requiredPaymentEnums = {
+    PaymentPlanStatus: ["PENDING", "ACTIVE", "COMPLETED", "CANCELLED"],
+    PaymentFrequency: ["WEEKLY", "BIWEEKLY", "MONTHLY", "CUSTOM"],
+    PaymentInstallmentStatus: ["PENDING", "PARTIALLY_PAID", "PAID", "OVERDUE"],
+  };
+  for (const [enumName, labels] of Object.entries(requiredPaymentEnums)) {
+    const actual = enums.get(enumName) || [];
+    if (labels.some((label) => !actual.includes(label))) throw new Error(`${enumName} is missing expected values.`);
+  }
+  console.info("Payment schedule enum values: verified");
 
   const indexRows = await prisma.$queryRaw`
     SELECT i.indisunique AS "isUnique", array_agg(a.attname ORDER BY key.ordinality) AS columns

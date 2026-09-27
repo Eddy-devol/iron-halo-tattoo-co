@@ -88,11 +88,11 @@ export default function ClientPortalDashboard({ booking }: { booking: ClientPort
                 <p className="mt-4 text-sm capitalize text-bone/60">{displayStatus(plan.status)}</p>
                 <dl className="mt-6 grid grid-cols-3 gap-3 border-y border-white/10 py-5">
                   <Field label="Total" value={amount(plan.totalAmount, plan.currency)} />
-                  <Field label="Paid" value={amount(plan.amountPaid, plan.currency)} />
+                  <Field label="Paid to date" value={amount(plan.amountPaid, plan.currency)} />
                   <Field label="Remaining" value={amount(plan.remainingBalance, plan.currency)} />
                 </dl>
                 <div className="mt-6">
-                  <h2 className="eyebrow">INSTALLMENTS</h2>
+                  <h2 className="eyebrow">INSTALLMENTS · {plan.installmentCount} {plan.frequency.toLowerCase()}</h2>
                   <ul className="mt-3 divide-y divide-white/10">
                     {plan.installments.map((installment) => (
                       <li key={installment.installmentNumber} className="grid grid-cols-[1fr_auto] gap-3 py-3 text-xs">
@@ -108,7 +108,7 @@ export default function ClientPortalDashboard({ booking }: { booking: ClientPort
                     <ul className="mt-3 divide-y divide-white/10">
                       {plan.payments.map((payment) => (
                         <li key={payment.receiptNumber} className="flex flex-wrap items-center justify-between gap-3 py-3 text-xs">
-                          <span>{date(payment.paidAt)} · {displayStatus(payment.method)}</span>
+                          <span>{date(payment.paidAt)} · {displayStatus(payment.source)} · {displayStatus(payment.method)}</span>
                           <span className="flex items-center gap-4">{amount(payment.amount, payment.currency)} <a className="text-rust underline underline-offset-4" href={`/portal/documents/receipt/${encodeURIComponent(payment.receiptNumber)}`}>Receipt</a></span>
                         </li>
                       ))}

@@ -1,8 +1,9 @@
 import "server-only";
+import { PaymentFrequency, PaymentInstallmentStatus } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentClientSession } from "@/lib/server/client-auth";
-import { calculatePaymentSummary, centsToString } from "@/lib/server/payment-ledger";
+import { calculatePaymentSummary, centsToString, deriveInstallmentStatus } from "@/lib/server/payment-ledger";
 
 export type ClientPortalBooking = {
   referenceNumber: string;
@@ -34,13 +35,15 @@ export type ClientPortalBooking = {
     remainingBalance: string;
     currency: string;
     status: string;
+    frequency: PaymentFrequency;
+    installmentCount: number;
     installments: Array<{
       installmentNumber: number;
       dueDate: string;
       amount: string;
       amountPaid: string;
       remaining: string;
-      status: string;
+      status: PaymentInstallmentStatus;
     }>;
     payments: Array<{
       receiptNumber: string;
@@ -48,6 +51,7 @@ export type ClientPortalBooking = {
       balanceAfter: string;
       currency: string;
       method: string;
+      source: string;
       paidAt: string;
     }>;
   } | null;
@@ -92,6 +96,8 @@ export async function getClientPortalBooking(bookingRequestId: string): Promise<
           totalAmount: true,
           currency: true,
           status: true,
+          frequency: true,
+          installmentCount: true,
           installments: {
             orderBy: { installmentNumber: "asc" },
             select: {
@@ -109,6 +115,7 @@ export async function getClientPortalBooking(bookingRequestId: string): Promise<
               balanceAfter: true,
               currency: true,
               method: true,
+              source: true,
               paidAt: true,
               createdAt: true,
             },
@@ -156,6 +163,8 @@ export async function getClientPortalBooking(bookingRequestId: string): Promise<
       remainingBalance: centsToString(summary.remainingCents),
       currency: plan.currency,
       status: summary.status,
+      frequency: plan.frequency,
+      installmentCount: plan.installmentCount,
       installments: plan.installments.map((installment) => {
         const installmentSummary = calculatePaymentSummary(installment.amount, installment.payments);
         return {
@@ -164,7 +173,7 @@ export async function getClientPortalBooking(bookingRequestId: string): Promise<
           amount: centsToString(installmentSummary.totalCents),
           amountPaid: centsToString(installmentSummary.paidCents),
           remaining: centsToString(installmentSummary.remainingCents),
-          status: installmentSummary.status,
+          status: deriveInstallmentStatus(installmentSummary.totalCents, installmentSummary.paidCents, installment.dueDate),
         };
       }),
       payments: plan.payments.map((payment) => ({
@@ -173,6 +182,7 @@ export async function getClientPortalBooking(bookingRequestId: string): Promise<
         balanceAfter: payment.balanceAfter.toFixed(2),
         currency: payment.currency,
         method: payment.method,
+        source: payment.source,
         paidAt: payment.paidAt.toISOString(),
       })),
     } : null,

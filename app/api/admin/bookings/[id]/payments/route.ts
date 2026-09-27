@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { authorizeAdminMutation } from "@/lib/server/admin-mutation";
 import { getCurrentAdmin } from "@/lib/server/auth";
 import { getBookingDocuments } from "@/lib/server/booking-documents";
-import { calculatePaymentSummary, centsToDecimal, parseMoneyToCents } from "@/lib/server/payment-ledger";
+import { calculatePaymentSummary, centsToDecimal, deriveInstallmentStatus, parseMoneyToCents } from "@/lib/server/payment-ledger";
 import { safeErrorCategory } from "@/lib/server/safe-error-category";
 
 const uuidSchema = z.string().uuid();
@@ -66,7 +66,9 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       remainingBalance: `${Math.floor(summary.remainingCents / 100)}.${String(summary.remainingCents % 100).padStart(2, "0")}`,
       currency: plan.currency,
       status: summary.status,
+      frequency: plan.frequency,
       installmentCount: plan.installmentCount,
+      firstDueDate: plan.firstDueDate?.toISOString() ?? null,
       createdAt: plan.createdAt.toISOString(),
       installments: plan.installments.map((installment) => {
         const installmentSummary = calculatePaymentSummary(installment.amount, installment.payments);
@@ -79,12 +81,13 @@ export async function GET(_request: Request, { params }: { params: { id: string 
           amountPaid: `${Math.floor(installmentSummary.paidCents / 100)}.${String(installmentSummary.paidCents % 100).padStart(2, "0")}`,
           remaining: `${Math.floor(installmentSummary.remainingCents / 100)}.${String(installmentSummary.remainingCents % 100).padStart(2, "0")}`,
           lastPaidAt: lastPayment?.paidAt.toISOString() ?? null,
+          status: deriveInstallmentStatus(installmentSummary.totalCents, installmentSummary.paidCents, installment.dueDate),
         };
       }),
       payments: plan.payments.map((payment) => ({
         id: payment.id,
         receiptNumber: payment.receiptNumber,
-        installmentNumber: payment.installment.installmentNumber,
+        installmentNumber: payment.installment?.installmentNumber ?? null,
         amount: payment.amount.toFixed(2),
         balanceAfter: payment.balanceAfter.toFixed(2),
         currency: payment.currency,
@@ -153,8 +156,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       }
       const newPaidCents = summary.paidCents + amountCents;
       const newStatus = newPaidCents === summary.totalCents
-        ? PaymentPlanStatus.PAID
-        : PaymentPlanStatus.PARTIALLY_PAID;
+        ? PaymentPlanStatus.COMPLETED
+        : PaymentPlanStatus.ACTIVE;
       const payment = await transaction.payment.create({
         data: {
           paymentPlanId: lockedPlan.id,
@@ -175,6 +178,16 @@ export async function POST(request: Request, { params }: { params: { id: string 
       await transaction.paymentPlan.update({
         where: { id: lockedPlan.id },
         data: { status: newStatus },
+      });
+      await transaction.paymentInstallment.update({
+        where: { id: installment.id },
+        data: {
+          status: deriveInstallmentStatus(
+            installmentSummary.totalCents,
+            installmentSummary.paidCents + amountCents,
+            installment.dueDate,
+          ),
+        },
       });
       await transaction.auditLog.create({
         data: {

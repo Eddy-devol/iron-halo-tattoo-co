@@ -201,8 +201,12 @@ export function PaymentPlanDocument({ booking }: { booking: BookingDocumentData 
       </section>
       <section className="document-section">
         <h2>Payment plan</h2>
+        <dl className="document-grid">
+          <Field label="Payment frequency" value={plan.frequency.toLowerCase()} />
+          <Field label="Number of installments" value={String(plan.installmentCount)} />
+        </dl>
         <table className="document-table">
-          <thead><tr><th>Installment</th><th>Due date</th><th>Amount</th><th>Paid</th><th>Date paid</th></tr></thead>
+          <thead><tr><th>Installment</th><th>Due date</th><th>Amount</th><th>Paid</th><th>Date paid</th><th>Status</th></tr></thead>
           <tbody>{plan.installments.map((installment) => (
             <tr key={installment.id}>
               <td>{installment.installmentNumber}</td>
@@ -210,12 +214,13 @@ export function PaymentPlanDocument({ booking }: { booking: BookingDocumentData 
               <td>{money(installment.amount, plan.currency)}</td>
               <td>{money(installment.amountPaid, plan.currency)}</td>
               <td>{displayDate(installment.lastPaidAt)}</td>
+              <td>{installment.status.replaceAll("_", " ")}</td>
             </tr>
           ))}</tbody>
         </table>
         <dl className="document-grid document-totals">
           <Field label="Total price" value={money(plan.totalAmount, plan.currency)} />
-          <Field label="Total paid" value={money(plan.amountPaid, plan.currency)} />
+          <Field label="Paid to date" value={money(plan.amountPaid, plan.currency)} />
           <Field label="Remaining balance" value={money(plan.remainingBalance, plan.currency)} />
           <Field label="Final payment due" value={displayDate(finalDue)} />
         </dl>
@@ -263,6 +268,7 @@ export function PaymentReceiptDocument({
           <Field label="Payment date" value={displayDate(payment.paidAt)} />
           <Field label="Payment method" value={payment.method.replaceAll("_", " ")} />
           <Field label="Amount paid" value={money(payment.amount, payment.currency)} />
+          <Field label="Payment source" value={payment.source === "DEPOSIT" ? "Deposit" : "Installment payment"} />
           <Field label="Payment-plan total" value={money(plan.totalAmount, plan.currency)} />
           <Field label="Remaining balance after payment" value={money(payment.balanceAfter, payment.currency)} />
         </dl>

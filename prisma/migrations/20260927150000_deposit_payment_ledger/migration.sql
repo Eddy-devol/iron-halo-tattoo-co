@@ -1,0 +1,8 @@
+ALTER TYPE "PaymentMethod" ADD VALUE 'MPESA';
+ALTER TYPE "PaymentSource" ADD VALUE 'DEPOSIT';
+
+ALTER TABLE "PaymentPlan"
+  ALTER COLUMN "firstDueDate" DROP NOT NULL;
+
+ALTER TABLE "Payment"
+  ALTER COLUMN "installmentId" DROP NOT NULL;

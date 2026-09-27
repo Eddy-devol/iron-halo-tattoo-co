@@ -1,7 +1,7 @@
 import "server-only";
-import { ConsentStatus, PaymentMethod, PaymentPlanStatus, PaymentSource } from "@prisma/client";
+import { ConsentStatus, PaymentFrequency, PaymentInstallmentStatus, PaymentMethod, PaymentPlanStatus, PaymentSource } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { calculatePaymentSummary, centsToString } from "@/lib/server/payment-ledger";
+import { calculatePaymentSummary, centsToString, deriveInstallmentStatus } from "@/lib/server/payment-ledger";
 
 export type BookingDocumentData = {
   id: string;
@@ -41,21 +41,24 @@ export type BookingDocumentData = {
     remainingBalance: string;
     currency: string;
     status: PaymentPlanStatus;
+    frequency: PaymentFrequency;
     installmentCount: number;
+    firstDueDate: string | null;
     createdAt: string;
     installments: Array<{
       id: string;
-      installmentNumber: number;
+      installmentNumber: number | null;
       dueDate: string;
       amount: string;
       amountPaid: string;
       remaining: string;
+      status: PaymentInstallmentStatus;
       lastPaidAt: string | null;
     }>;
     payments: Array<{
       id: string;
       receiptNumber: string;
-      installmentNumber: number;
+      installmentNumber: number | null;
       amount: string;
       balanceAfter: string;
       currency: string;
@@ -144,7 +147,9 @@ export async function getBookingDocuments(bookingId: string): Promise<BookingDoc
       remainingBalance: centsToString(paymentSummary.remainingCents),
       currency: plan.currency,
       status: paymentSummary.status,
+      frequency: plan.frequency,
       installmentCount: plan.installmentCount,
+      firstDueDate: plan.firstDueDate?.toISOString() ?? null,
       createdAt: plan.createdAt.toISOString(),
       installments: plan.installments.map((installment) => {
         const installmentPaid = calculatePaymentSummary(installment.amount, installment.payments);
@@ -155,6 +160,7 @@ export async function getBookingDocuments(bookingId: string): Promise<BookingDoc
           amount: centsToString(installmentPaid.totalCents),
           amountPaid: centsToString(installmentPaid.paidCents),
           remaining: centsToString(installmentPaid.remainingCents),
+          status: deriveInstallmentStatus(installmentPaid.totalCents, installmentPaid.paidCents, installment.dueDate),
           lastPaidAt: installment.payments.length
             ? installment.payments[installment.payments.length - 1].paidAt.toISOString()
             : null,
@@ -163,7 +169,7 @@ export async function getBookingDocuments(bookingId: string): Promise<BookingDoc
       payments: plan.payments.map((payment) => ({
         id: payment.id,
         receiptNumber: payment.receiptNumber,
-        installmentNumber: payment.installment.installmentNumber,
+        installmentNumber: payment.installment?.installmentNumber ?? null,
         amount: payment.amount.toFixed(2),
         balanceAfter: payment.balanceAfter.toFixed(2),
         currency: payment.currency,

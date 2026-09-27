@@ -43,6 +43,7 @@ import { POST as requestClientLink } from "@/app/api/client/auth/request-link/ro
 import { POST as verifyClientLink } from "@/app/api/client/auth/verify/route";
 import { POST as logoutClient } from "@/app/api/client/auth/logout/route";
 import { GET as getClientBooking } from "@/app/api/client/booking/route";
+import { POST as recordAdminPayment } from "@/app/api/admin/bookings/[id]/payments/route";
 import * as clientBookingRoute from "@/app/api/client/booking/route";
 import ClientDocumentPage from "@/app/portal/documents/[document]/page";
 import ClientReceiptPage from "@/app/portal/documents/receipt/[receiptNumber]/page";
@@ -297,13 +298,14 @@ describe("client portal authentication and booking isolation", () => {
       data: {
         bookingRequestId: booking.id,
         totalAmount: new Prisma.Decimal("100.00"),
+        firstDueDate: new Date("2026-10-01T00:00:00.000Z"),
         currency: "USD",
         installmentCount: 1,
         installments: {
           create: {
             installmentNumber: 1,
             dueDate: new Date("2026-10-01T00:00:00.000Z"),
-            amount: new Prisma.Decimal("100.00"),
+            amount: new Prisma.Decimal("75.00"),
           },
         },
       },
@@ -312,14 +314,14 @@ describe("client portal authentication and booking isolation", () => {
     const savedPayment = await prisma.payment.create({
       data: {
         paymentPlanId: plan.id,
-        installmentId: plan.installments[0].id,
+        installmentId: null,
         recordedById: adminId,
         receiptNumber: `IH-${randomUUID()}`,
         amount: new Prisma.Decimal("25.00"),
         balanceAfter: new Prisma.Decimal("75.00"),
         currency: "USD",
         method: "CASH",
-        source: "MANUAL",
+        source: "DEPOSIT",
         paidAt: new Date("2026-09-27T12:00:00.000Z"),
         notes: `${prefix} SECRET STAFF PAYMENT NOTE`,
       },
@@ -340,13 +342,33 @@ describe("client portal authentication and booking isolation", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     const serialized = JSON.stringify(payload);
+    const clientPaymentPlanDocument = renderToStaticMarkup(await ClientDocumentPage({ params: { document: "payment-plan" } }));
     expect(payload.booking.paymentPlan).toMatchObject({
       totalAmount: "100.00",
       amountPaid: "25.00",
       remainingBalance: "75.00",
-      installments: [{ status: "PARTIALLY_PAID" }],
+      frequency: "CUSTOM",
+      installmentCount: 1,
+      installments: [{ amount: "75.00", amountPaid: "0.00", remaining: "75.00", status: "PENDING" }],
     });
     expect(payload.booking.paymentPlan.payments).toHaveLength(1);
+    expect(payload.booking.paymentPlan.payments[0]).toMatchObject({ amount: "25.00", source: "DEPOSIT" });
+    expect(clientPaymentPlanDocument).toContain("Paid to date");
+    expect(clientPaymentPlanDocument).toContain("25.00");
+    expect(clientPaymentPlanDocument).toContain("Payment frequency");
+    expect(clientPaymentPlanDocument).toContain("Number of installments");
+    expect(clientPaymentPlanDocument).toContain("custom");
+    const clientPaymentAttempt = await recordAdminPayment(new Request(`http://localhost/api/admin/bookings/${booking.id}/payments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "http://localhost" },
+      body: JSON.stringify({
+        installmentId: plan.installments[0].id,
+        amount: "1.00",
+        method: "CASH",
+        paidAt: "2026-10-01",
+      }),
+    }), { params: { id: booking.id } });
+    expect(clientPaymentAttempt.status).toBe(401);
     expect(payload.booking.consent.status).toBe("NOT_COMPLETED");
     expect(serialized).not.toContain("SECRET ADMIN NOTE");
     expect(serialized).not.toContain("SECRET STAFF PAYMENT NOTE");
@@ -391,6 +413,7 @@ describe("client portal authentication and booking isolation", () => {
         paymentPlan: {
           create: {
             totalAmount: new Prisma.Decimal("10.00"),
+            firstDueDate: new Date("2026-10-01T00:00:00.000Z"),
             currency: "USD",
             installmentCount: 1,
             installments: {

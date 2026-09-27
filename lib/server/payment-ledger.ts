@@ -1,4 +1,4 @@
-import { PaymentPlanStatus, Prisma } from "@prisma/client";
+import { PaymentInstallmentStatus, PaymentPlanStatus, Prisma } from "@prisma/client";
 
 export function parseMoneyToCents(value: string) {
   const match = /^(0|[1-9]\d{0,9})(?:\.(\d{1,2}))?$/.exec(value.trim());
@@ -26,8 +26,17 @@ export function centsToString(cents: number) {
 export function derivePaymentStatus(totalCents: number, paidCents: number, cancelled = false) {
   if (cancelled) return PaymentPlanStatus.CANCELLED;
   if (paidCents === 0) return PaymentPlanStatus.PENDING;
-  if (paidCents >= totalCents) return PaymentPlanStatus.PAID;
-  return PaymentPlanStatus.PARTIALLY_PAID;
+  if (paidCents > totalCents) throw new Error("Recorded payments exceed the plan total.");
+  if (paidCents === totalCents) return PaymentPlanStatus.COMPLETED;
+  return PaymentPlanStatus.ACTIVE;
+}
+
+export function deriveInstallmentStatus(totalCents: number, paidCents: number, dueDate: Date, now = new Date()) {
+  if (paidCents > totalCents) throw new Error("Recorded payments exceed the installment amount.");
+  if (paidCents >= totalCents) return PaymentInstallmentStatus.PAID;
+  if (dueDate.toISOString().slice(0, 10) < now.toISOString().slice(0, 10)) return PaymentInstallmentStatus.OVERDUE;
+  if (paidCents > 0) return PaymentInstallmentStatus.PARTIALLY_PAID;
+  return PaymentInstallmentStatus.PENDING;
 }
 
 export function calculatePaymentSummary(
@@ -37,10 +46,11 @@ export function calculatePaymentSummary(
 ) {
   const totalCents = decimalToCents(total);
   const paidCents = payments.reduce((sum, payment) => sum + decimalToCents(payment.amount), 0);
+  if (paidCents > totalCents) throw new Error("Recorded payments exceed the plan total.");
   return {
     totalCents,
     paidCents,
-    remainingCents: Math.max(0, totalCents - paidCents),
+    remainingCents: totalCents - paidCents,
     status: derivePaymentStatus(totalCents, paidCents, cancelled),
   };
 }

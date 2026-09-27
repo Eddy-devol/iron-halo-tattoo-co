@@ -89,8 +89,10 @@ function PaymentPlan({ booking }: { booking: ClientPortalBooking }) {
       <section className="document-section"><h2>Payment summary</h2><dl className="document-grid">
         <Field label="Status" value={plan.status.replaceAll("_", " ")} />
         <Field label="Total" value={amount(plan.totalAmount, plan.currency)} />
-        <Field label="Paid" value={amount(plan.amountPaid, plan.currency)} />
+        <Field label="Paid to date" value={amount(plan.amountPaid, plan.currency)} />
         <Field label="Remaining" value={amount(plan.remainingBalance, plan.currency)} />
+        <Field label="Payment frequency" value={plan.frequency.toLowerCase()} />
+        <Field label="Number of installments" value={String(plan.installmentCount)} />
       </dl></section>
       <section className="document-section"><h2>Installments</h2><table className="document-table">
         <thead><tr><th>Installment</th><th>Due date</th><th>Amount</th><th>Paid</th><th>Remaining</th><th>Status</th></tr></thead>
@@ -117,6 +119,7 @@ function Receipt({ booking, receiptNumber }: { booking: ClientPortalBooking; rec
         <Field label="Payment date" value={date(payment.paidAt)} />
         <Field label="Payment method" value={payment.method.replaceAll("_", " ")} />
         <Field label="Amount paid" value={amount(payment.amount, payment.currency)} />
+        <Field label="Payment source" value={payment.source === "DEPOSIT" ? "Deposit" : "Installment payment"} />
         <Field label="Payment-plan total" value={amount(plan.totalAmount, plan.currency)} />
         <Field label="Remaining balance after payment" value={amount(payment.balanceAfter, payment.currency)} />
       </dl></section>

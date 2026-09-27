@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, ReactNode, useEffect, useState } from "react";
+import { generatePaymentSchedule, scheduleTotalCents, type PaymentFrequency } from "@/lib/payment-schedule";
 
 type Installment = {
   id: string;
@@ -11,12 +12,13 @@ type Installment = {
   amountPaid: string;
   remaining: string;
   lastPaidAt: string | null;
+  status: string;
 };
 
 type Payment = {
   id: string;
   receiptNumber: string;
-  installmentNumber: number;
+  installmentNumber: number | null;
   amount: string;
   balanceAfter: string;
   currency: string;
@@ -35,7 +37,9 @@ type PaymentPlan = {
   remainingBalance: string;
   currency: string;
   status: string;
+  frequency: PaymentFrequency;
   installmentCount: number;
+  firstDueDate: string | null;
   installments: Installment[];
   payments: Payment[];
 } | null;
@@ -95,7 +99,13 @@ export default function AdminBookingDocumentsAndPayments({
   const [busy, setBusy] = useState(false);
   const [totalAmount, setTotalAmount] = useState("");
   const [currency, setCurrency] = useState("");
-  const [installments, setInstallments] = useState<InstallmentDraft[]>([{ dueDate: "", amount: "" }]);
+  const [amountAlreadyPaid, setAmountAlreadyPaid] = useState("0.00");
+  const [depositMethod, setDepositMethod] = useState("CASH");
+  const [depositDate, setDepositDate] = useState("");
+  const [frequency, setFrequency] = useState<PaymentFrequency>("MONTHLY");
+  const [installmentCount, setInstallmentCount] = useState("1");
+  const [firstDueDate, setFirstDueDate] = useState("");
+  const [customInstallments, setCustomInstallments] = useState<InstallmentDraft[]>([{ dueDate: "", amount: "" }]);
   const [selectedInstallmentId, setSelectedInstallmentId] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("CASH");
@@ -114,6 +124,22 @@ export default function AdminBookingDocumentsAndPayments({
   const [consentStatus, setConsentStatus] = useState(consentRecord?.status ?? "NOT_COMPLETED");
   const [consentMessage, setConsentMessage] = useState("");
   const [assignedArtist, setAssignedArtist] = useState(artistName ?? "");
+
+  const totalCents = scheduleTotalCents([{ dueDate: "", amount: totalAmount }]);
+  const amountAlreadyPaidCents = amountAlreadyPaid === "" ? 0 : scheduleTotalCents([{ dueDate: "", amount: amountAlreadyPaid }]);
+  const remainingCents = totalCents !== null && amountAlreadyPaidCents !== null ? totalCents - amountAlreadyPaidCents : null;
+  const generatedSchedule = frequency === "CUSTOM"
+    ? customInstallments
+    : totalCents && amountAlreadyPaidCents !== null && remainingCents !== null && remainingCents >= 0
+      ? generatePaymentSchedule({
+        totalCents,
+        amountAlreadyPaidCents,
+        installmentCount: remainingCents === 0 ? 0 : Number(installmentCount),
+        frequency,
+        firstDueDate,
+      }) ?? []
+      : [];
+  const previewTotalCents = scheduleTotalCents(generatedSchedule);
 
   useEffect(() => {
     let active = true;
@@ -143,8 +169,13 @@ export default function AdminBookingDocumentsAndPayments({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           totalAmount,
+          amountAlreadyPaid,
+          ...(amountAlreadyPaidCents !== null && amountAlreadyPaidCents > 0 ? { paymentMethod: depositMethod, paymentDate: depositDate } : {}),
           currency: currency.toUpperCase(),
-          installments,
+          frequency,
+          installmentCount: remainingCents === 0 ? 0 : frequency === "CUSTOM" ? customInstallments.length : Number(installmentCount),
+          ...(remainingCents !== 0 && frequency !== "CUSTOM" ? { firstDueDate } : {}),
+          ...(remainingCents !== 0 && frequency === "CUSTOM" ? { installments: customInstallments } : {}),
         }),
       });
       const payload = await response.json();
@@ -250,10 +281,30 @@ export default function AdminBookingDocumentsAndPayments({
           <>
             <dl className="mt-5 grid gap-5 border-y border-ink/10 py-5 sm:grid-cols-4">
               <div><dt className="eyebrow">Total price</dt><dd className="mt-2 text-sm">{amountLabel(plan.totalAmount, plan.currency)}</dd></div>
-              <div><dt className="eyebrow">Amount paid</dt><dd className="mt-2 text-sm">{amountLabel(plan.amountPaid, plan.currency)}</dd></div>
+              <div><dt className="eyebrow">Paid to date</dt><dd className="mt-2 text-sm">{amountLabel(plan.amountPaid, plan.currency)}</dd></div>
               <div><dt className="eyebrow">Remaining balance</dt><dd className="mt-2 text-sm">{amountLabel(plan.remainingBalance, plan.currency)}</dd></div>
               <div><dt className="eyebrow">Payment status</dt><dd className="mt-2 text-sm capitalize">{plan.status.toLowerCase().replaceAll("_", " ")}</dd></div>
+              <div><dt className="eyebrow">Payment frequency</dt><dd className="mt-2 text-sm capitalize">{plan.frequency.toLowerCase()}</dd></div>
+              <div><dt className="eyebrow">Installments</dt><dd className="mt-2 text-sm">{plan.installmentCount}</dd></div>
             </dl>
+            <div className="mt-6 overflow-x-auto">
+              <h3 className="eyebrow mb-3">Installment schedule</h3>
+              <table className="w-full min-w-[600px] border-collapse text-left text-xs">
+                <thead><tr className="border-b border-ink/15 text-[10px] uppercase tracking-[.12em] text-ink/50">
+                  <th className="py-3 pr-3">Installment</th><th className="py-3 pr-3">Due date</th><th className="py-3 pr-3">Amount</th><th className="py-3 pr-3">Paid</th><th className="py-3 pr-3">Remaining</th><th className="py-3">Status</th>
+                </tr></thead>
+                <tbody>{plan.installments.map((item) => (
+                  <tr key={item.id} className="border-b border-ink/10">
+                    <td className="py-3 pr-3">#{item.installmentNumber}</td>
+                    <td className="py-3 pr-3">{shortDate(item.dueDate)}</td>
+                    <td className="py-3 pr-3">{amountLabel(item.amount, plan.currency)}</td>
+                    <td className="py-3 pr-3">{amountLabel(item.amountPaid, plan.currency)}</td>
+                    <td className="py-3 pr-3">{amountLabel(item.remaining, plan.currency)}</td>
+                    <td className="py-3 capitalize">{item.status.toLowerCase().replaceAll("_", " ")}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
             <div className="mt-6 overflow-x-auto">
               <h3 className="eyebrow mb-3">Payment ledger</h3>
               {!plan.payments.length ? <p className="text-sm text-ink/55">No payments recorded.</p> : (
@@ -263,7 +314,7 @@ export default function AdminBookingDocumentsAndPayments({
                   </tr></thead>
                   <tbody>{plan.payments.map((payment) => (
                     <tr key={payment.id} className="border-b border-ink/10 align-top">
-                      <td className="py-3 pr-3">#{payment.installmentNumber} · Manual</td>
+                      <td className="py-3 pr-3">{payment.installmentNumber ? `#${payment.installmentNumber}` : "Deposit"} · {payment.source}</td>
                       <td className="py-3 pr-3">{amountLabel(payment.amount, payment.currency)}</td>
                       <td className="py-3 pr-3">{shortDate(payment.paidAt)}</td>
                       <td className="py-3 pr-3">{payment.method.replaceAll("_", " ")}</td>
@@ -310,30 +361,97 @@ export default function AdminBookingDocumentsAndPayments({
         ) : !planLoading ? (
           <form onSubmit={submitPlan} className="mt-5 border border-ink/15 bg-white/25 p-5 sm:p-6">
             <h3 className="font-display text-2xl">Create payment plan</h3>
-            <p className="mt-2 text-xs text-ink/55">Set custom installment amounts and due dates. Their sum must exactly match the total.</p>
+            <p className="mt-2 text-xs text-ink/55">Record only money already received. Future installments are generated against the remaining balance.</p>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <label className="grid gap-2 text-xs">Total tattoo price
                 <input required inputMode="decimal" pattern="(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?" value={totalAmount} onChange={(event) => setTotalAmount(event.target.value)} className="border border-ink/20 bg-transparent p-3" />
               </label>
+              <label className="grid gap-2 text-xs">Amount already paid / deposit
+                <input required inputMode="decimal" pattern="(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?" value={amountAlreadyPaid} onChange={(event) => setAmountAlreadyPaid(event.target.value)} className="border border-ink/20 bg-transparent p-3" />
+              </label>
+              {amountAlreadyPaidCents !== null && amountAlreadyPaidCents > 0 && (
+                <>
+                  <label className="grid gap-2 text-xs">Deposit payment method
+                    <select required value={depositMethod} onChange={(event) => setDepositMethod(event.target.value)} className="border border-ink/20 bg-[#f1ede5] p-3">
+                      <option value="CASH">Cash</option><option value="CARD">Card</option><option value="BANK_TRANSFER">Bank transfer</option><option value="MPESA">M-Pesa</option><option value="OTHER">Other</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-xs">Deposit payment date
+                    <input required type="date" value={depositDate} onChange={(event) => setDepositDate(event.target.value)} className="border border-ink/20 bg-transparent p-3" />
+                  </label>
+                </>
+              )}
+              <label className="grid gap-2 text-xs">Payment frequency
+                <select value={frequency} onChange={(event) => setFrequency(event.target.value as PaymentFrequency)} className="border border-ink/20 bg-[#f1ede5] p-3">
+                  <option value="WEEKLY">Weekly</option><option value="BIWEEKLY">Biweekly</option><option value="MONTHLY">Monthly</option><option value="CUSTOM">Custom dates and amounts</option>
+                </select>
+              </label>
+              {frequency !== "CUSTOM" && (
+                <>
+                  {remainingCents !== 0 && (
+                    <>
+                      <label className="grid gap-2 text-xs">Number of future installments
+                        <input required type="number" min={1} max={24} value={installmentCount} onChange={(event) => setInstallmentCount(event.target.value)} className="border border-ink/20 bg-transparent p-3" />
+                      </label>
+                      <label className="grid gap-2 text-xs">First future due date
+                        <input required type="date" value={firstDueDate} onChange={(event) => setFirstDueDate(event.target.value)} className="border border-ink/20 bg-transparent p-3" />
+                      </label>
+                    </>
+                  )}
+                </>
+              )}
               <label className="grid gap-2 text-xs">Currency (ISO 4217)
                 <input required minLength={3} maxLength={3} pattern="[A-Za-z]{3}" placeholder="e.g. USD" value={currency} onChange={(event) => setCurrency(event.target.value.toUpperCase())} className="border border-ink/20 bg-transparent p-3 uppercase" />
               </label>
             </div>
-            <div className="mt-6 space-y-3">
-              {installments.map((installment, index) => (
-                <div key={index} className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
-                  <label className="grid gap-2 text-xs">Installment {index + 1} due date
-                    <input type="date" required value={installment.dueDate} onChange={(event) => setInstallments((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, dueDate: event.target.value } : item))} className="border border-ink/20 bg-transparent p-3" />
+            <div className="mt-6 overflow-x-auto">
+              <h4 className="eyebrow mb-3">Generated schedule preview</h4>
+              {remainingCents === 0 ? <p className="text-sm text-ink/60">Paid in full. No future installments are required.</p> : frequency === "CUSTOM" ? (
+                <div className="space-y-3">
+                  <label className="grid max-w-sm gap-2 text-xs">Number of installments
+                    <input required type="number" min={1} max={24} value={customInstallments.length} onChange={(event) => {
+                      const count = Number(event.target.value);
+                      if (!Number.isInteger(count) || count < 1 || count > 24) return;
+                      setCustomInstallments((current) => Array.from({ length: count }, (_, index) => current[index] ?? { dueDate: "", amount: "" }));
+                    }} className="border border-ink/20 bg-transparent p-3" />
                   </label>
-                  <label className="grid gap-2 text-xs">Amount
-                    <input required inputMode="decimal" pattern="(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?" value={installment.amount} onChange={(event) => setInstallments((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))} className="border border-ink/20 bg-transparent p-3" />
-                  </label>
-                  <button type="button" disabled={installments.length <= 1} onClick={() => setInstallments((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="border border-ink/20 px-4 py-3 text-xs disabled:opacity-40">Remove</button>
+                  {customInstallments.map((installment, index) => (
+                    <div key={index} className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto_auto]">
+                      <label className="grid gap-2 text-xs">Installment {index + 1} due date
+                        <input type="date" required value={installment.dueDate} onChange={(event) => setCustomInstallments((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, dueDate: event.target.value } : item))} className="border border-ink/20 bg-transparent p-3" />
+                      </label>
+                      <label className="grid gap-2 text-xs">Amount
+                        <input required inputMode="decimal" pattern="(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?" value={installment.amount} onChange={(event) => setCustomInstallments((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))} className="border border-ink/20 bg-transparent p-3" />
+                      </label>
+                      <span className="pb-3 text-xs text-ink/60">Pending</span>
+                      <button type="button" disabled={customInstallments.length <= 1} onClick={() => setCustomInstallments((current) => current.length <= 1 ? current : current.slice(0, -1))} className="border border-ink/20 px-4 py-3 text-xs disabled:opacity-40">Remove last</button>
+                    </div>
+                  ))}
+                  <button type="button" disabled={customInstallments.length >= 24} onClick={() => setCustomInstallments((current) => [...current, { dueDate: "", amount: "" }])} className="text-xs uppercase tracking-[.14em] text-rust underline">Add installment</button>
                 </div>
-              ))}
-              <button type="button" disabled={installments.length >= 24} onClick={() => setInstallments((current) => [...current, { dueDate: "", amount: "" }])} className="text-xs uppercase tracking-[.14em] text-rust underline">Add installment</button>
+              ) : (
+                <table className="w-full min-w-[460px] border-collapse text-left text-xs">
+                  <thead><tr className="border-b border-ink/15 text-[10px] uppercase tracking-[.12em] text-ink/50"><th className="py-3 pr-3">Installment</th><th className="py-3 pr-3">Due date</th><th className="py-3 pr-3">Amount</th><th className="py-3">Status</th></tr></thead>
+                  <tbody>{generatedSchedule.map((item, index) => (
+                    <tr key={`${item.dueDate}-${index}`} className="border-b border-ink/10">
+                      <td className="py-3 pr-3">#{index + 1}</td>
+                      <td className="py-3 pr-3">{shortDate(item.dueDate)}</td>
+                      <td className="py-3 pr-3">{amountLabel(item.amount, currency || "USD")}</td>
+                      <td className="py-3">Pending</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              )}
+              {remainingCents !== 0 && <p className={`mt-3 text-xs ${previewTotalCents === remainingCents && generatedSchedule.length ? "text-green-800" : "text-rust"}`} role="status">
+                Total price: {totalCents === null ? "—" : amountLabel(`${Math.floor(totalCents / 100)}.${String(totalCents % 100).padStart(2, "0")}`, currency || "USD")}
+                {" · "}Paid to date: {amountAlreadyPaidCents === null ? "—" : amountLabel(`${Math.floor(amountAlreadyPaidCents / 100)}.${String(amountAlreadyPaidCents % 100).padStart(2, "0")}`, currency || "USD")}
+                {" · "}Remaining balance: {remainingCents === null ? "—" : amountLabel(`${Math.floor(remainingCents / 100)}.${String(remainingCents % 100).padStart(2, "0")}`, currency || "USD")}
+                {" · "}Schedule total: {previewTotalCents === null ? "Enter valid installment amounts and dates." : amountLabel(`${Math.floor(previewTotalCents / 100)}.${String(previewTotalCents % 100).padStart(2, "0")}`, currency || "USD")}
+                {remainingCents !== null && previewTotalCents !== remainingCents ? " — must equal the remaining balance." : ""}
+              </p>
+              }
             </div>
-            <div className="mt-5"><ActionButton disabled={busy}>{busy ? "Saving…" : "Create payment plan"}</ActionButton></div>
+            <div className="mt-5"><ActionButton disabled={busy || totalCents === null || totalCents <= 0 || amountAlreadyPaidCents === null || remainingCents === null || remainingCents < 0 || (remainingCents > 0 && (!generatedSchedule.length || previewTotalCents !== remainingCents || (frequency !== "CUSTOM" && generatedSchedule.length !== Number(installmentCount)) || (frequency === "CUSTOM" && generatedSchedule.length !== customInstallments.length))) || (amountAlreadyPaidCents > 0 && !depositDate)}>{busy ? "Saving…" : "Create payment plan"}</ActionButton></div>
           </form>
         ) : null}
       </section>
