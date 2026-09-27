@@ -78,6 +78,15 @@ The Archive uses the existing private S3-compatible storage. Public image delive
 - Client records support DOB, address, ID type, and an optional ID last-four reference; the application does not store full government ID numbers. Admins explicitly record in-person ID verification and completion after confirming the physical signed form. Printing does not mark consent completed.
 - Before deployment, apply the additive migration with `npx prisma migrate deploy` only after verifying the intended database target. Do not use `prisma migrate reset`; local route verification uses only the isolated test database.
 
+### Client portal
+
+- `/portal/login` requests a one-time access link using the booking email and reference. Responses do not reveal whether the submitted details match a booking. Links expire after 15 minutes and are single-use.
+- A successful link creates a seven-day client session bound to exactly one booking. Client session tokens and unused access tokens are stored only as hashes. The client cookie is HttpOnly, SameSite=Lax, and Secure in production.
+- The portal is read-only for payment, booking, and consent data. Consent completion remains an in-person physical-signature process recorded by an administrator; viewing or printing a consent document does not change status.
+- Configure the existing `RESEND_API_KEY`, `EMAIL_FROM`, and exact `NEXT_PUBLIC_SITE_URL` values for the deployment. Client access links are sent to the email already stored on the matching booking.
+- Client pages and documents use a dedicated safe data projection, omit staff notes, payment notes, audit history, administrator and verification details, and require the booking-bound client session. Archive remains independent.
+- Apply the additive `20260927130000_client_portal_auth` migration to each intended database with `npx prisma migrate deploy` after verifying the target. It adds only client access-token and client-session tables and their indexes/foreign keys; it does not alter existing booking or Archive data.
+
 ## Booking flow
 
 The form accepts client details, project description, style, placement, scale, color preference, timeframe, and optional reference images. Booking requests persist through Prisma; reference images are validated and stored as private S3-compatible objects with metadata in PostgreSQL. The public API returns only a human-friendly `IH-YYYY-XXXXXX` reference.

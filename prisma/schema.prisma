@@ -120,6 +120,8 @@ model BookingRequest {
   appointments       Appointment[]
   paymentPlan        PaymentPlan?
   consentRecord      TattooConsentRecord?
+  clientAccessTokens ClientAccessToken[]
+  clientSessions     ClientSession[]
 
   @@index([status, createdAt])
   @@index([email])
@@ -276,4 +278,28 @@ model TattooConsentRecord {
   completedBy              User?          @relation("ConsentCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
 
   @@index([status, updatedAt])
+}
+
+model ClientAccessToken {
+  id               String         @id @default(uuid()) @db.Uuid
+  bookingRequestId String         @db.Uuid
+  tokenHash        String         @unique
+  expiresAt        DateTime
+  createdAt        DateTime       @default(now())
+  bookingRequest   BookingRequest @relation(fields: [bookingRequestId], references: [id], onDelete: Cascade)
+
+  @@index([bookingRequestId, expiresAt])
+  @@index([expiresAt])
+}
+
+model ClientSession {
+  id               String         @id @default(uuid()) @db.Uuid
+  bookingRequestId String         @db.Uuid
+  tokenHash        String         @unique
+  expiresAt        DateTime
+  createdAt        DateTime       @default(now())
+  bookingRequest   BookingRequest @relation(fields: [bookingRequestId], references: [id], onDelete: Cascade)
+
+  @@index([bookingRequestId, expiresAt])
+  @@index([expiresAt])
 }

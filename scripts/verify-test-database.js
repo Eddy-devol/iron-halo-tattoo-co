@@ -5,6 +5,8 @@ const prisma = new PrismaClient();
 const requiredTables = [
   "User",
   "Session",
+  "ClientAccessToken",
+  "ClientSession",
   "BookingRequest",
   "BookingReferenceImage",
   "BookingNote",
@@ -89,6 +91,28 @@ async function main() {
   }
   console.info("Payment and consent document fields: verified");
 
+  const clientAuthColumnRows = await prisma.$queryRaw`
+    SELECT table_name AS "tableName", column_name AS name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name IN ('ClientAccessToken', 'ClientSession')
+  `;
+  const clientAuthColumns = new Map();
+  for (const row of clientAuthColumnRows) {
+    if (!clientAuthColumns.has(row.tableName)) clientAuthColumns.set(row.tableName, new Set());
+    clientAuthColumns.get(row.tableName).add(row.name);
+  }
+  const expectedClientAuthColumns = {
+    ClientAccessToken: ["bookingRequestId", "tokenHash", "expiresAt"],
+    ClientSession: ["bookingRequestId", "tokenHash", "expiresAt"],
+  };
+  for (const [tableName, expected] of Object.entries(expectedClientAuthColumns)) {
+    const actual = clientAuthColumns.get(tableName) || new Set();
+    const missing = expected.filter((column) => !actual.has(column));
+    if (missing.length) throw new Error(`${tableName} is missing client authentication fields: ${missing.join(", ")}`);
+  }
+  console.info("Client access token and session fields: verified");
+
   const archiveColumnRows = await prisma.$queryRaw`
     SELECT column_name AS name
     FROM information_schema.columns
@@ -167,6 +191,20 @@ async function main() {
     throw new Error(`ArchiveArtwork is missing expected indexes: ${missingArchiveIndexes.join(", ")}`);
   }
   console.info("ArchiveArtwork indexes: verified");
+
+  const archiveForeignKeys = await prisma.$queryRaw`
+    SELECT count(*)::int AS count
+    FROM pg_constraint
+    WHERE contype = 'f'
+      AND (
+        conrelid = to_regclass('"ArchiveArtwork"')
+        OR confrelid = to_regclass('"ArchiveArtwork"')
+      )
+  `;
+  if (archiveForeignKeys[0].count !== 0) {
+    throw new Error("ArchiveArtwork must remain independent of bookings and payments.");
+  }
+  console.info("ArchiveArtwork foreign-key independence: verified");
 
   const concurrentResults = await Promise.all(
     Array.from({ length: 5 }, () => prisma.$queryRaw`SELECT 1 AS value`),

@@ -8,6 +8,11 @@ export function middleware(request: NextRequest) {
     }
   }
   const response = NextResponse.next();
+  if (request.nextUrl.pathname.startsWith("/portal")) {
+    response.headers.set("Cache-Control", "private, no-store, max-age=0");
+    response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+    response.headers.set("Referrer-Policy", "no-referrer");
+  }
   if (/^\/admin\/bookings\/[^/]+\/print(?:\/|$)/.test(request.nextUrl.pathname)) {
     response.headers.set("Cache-Control", "private, no-store, max-age=0");
     response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
@@ -15,4 +20,4 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ["/admin/:path*"] };
+export const config = { matcher: ["/admin/:path*", "/portal/:path*"] };
