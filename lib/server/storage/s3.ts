@@ -29,6 +29,13 @@ export async function deletePrivateObject(key: string) {
   await client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
+export async function readPrivateObject(key: string) {
+  const { bucket } = configuration();
+  const result = await client().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (!result.Body) throw new Error("Stored object has no response body.");
+  return result.Body.transformToByteArray();
+}
+
 export async function createSignedReadUrl(key: string, expiresIn = 300) {
   const { bucket } = configuration();
   return getSignedUrl(client(), new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn });

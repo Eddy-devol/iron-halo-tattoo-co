@@ -60,6 +60,15 @@ Resend remains optional for accepting bookings. Booking data is persisted before
 - `/api/admin/bookings` â€” authenticated, searchable, status-filtered booking list
 - `/api/admin/bookings/[id]` â€” authenticated booking details with short-lived image links
 
+### Archive routes
+
+- `/admin/archive` — authenticated portfolio artwork management
+- `/admin/archive/new`, `/admin/archive/[id]` — add and edit artwork
+- `/api/admin/archive`, `/api/admin/archive/[id]` — authenticated Archive management
+- `/api/archive` — published artwork listing and slug-scoped public image delivery
+
+The Archive uses the existing private S3-compatible storage. Public image delivery resolves only published artwork slugs and never returns storage keys or credentials. Admin previews require the existing database-backed admin session.
+
 ## Booking flow
 
 The form accepts client details, project description, style, placement, scale, color preference, timeframe, and optional reference images. Booking requests persist through Prisma; reference images are validated and stored as private S3-compatible objects with metadata in PostgreSQL. The public API returns only a human-friendly `IH-YYYY-XXXXXX` reference.

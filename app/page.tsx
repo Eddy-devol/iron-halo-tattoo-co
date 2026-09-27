@@ -1,16 +1,21 @@
 import Link from "next/link";
 import Image from "next/image";
 import { resolveStudioContactDetails } from "@/lib/studio-contact";
+import { listPublishedArchiveArtworks } from "@/lib/server/archive-public";
+import { safeErrorCategory } from "@/lib/server/safe-error-category";
 
 export const dynamic = "force-dynamic";
 
-const work = [
-  { title: "Blackwork / étude no. 07", type: "Custom study", image: "https://images.unsplash.com/photo-1542727365-19732a80dcfd?auto=format&fit=crop&w=1100&q=85" },
-  { title: "Botanical geometry", type: "Fine line", image: "https://images.unsplash.com/photo-1598373182133-52452f7691ef?auto=format&fit=crop&w=1100&q=85" },
-  { title: "A quiet orbit", type: "Black & grey", image: "https://images.unsplash.com/photo-1565058379802-bbe93b2f703a?auto=format&fit=crop&w=1100&q=85" }
-];
+export default async function Home() {
+  let work: Awaited<ReturnType<typeof listPublishedArchiveArtworks>> = [];
+  let archiveUnavailable = false;
+  try {
+    work = await listPublishedArchiveArtworks();
+  } catch (error) {
+    archiveUnavailable = true;
+    console.error("PUBLIC_ARCHIVE_RENDER_FAILED", { errorCategory: safeErrorCategory(error) });
+  }
 
-export default function Home() {
   const contact = resolveStudioContactDetails({
     email: process.env.STUDIO_CONTACT_EMAIL,
     phone: process.env.STUDIO_CONTACT_PHONE,
@@ -45,7 +50,9 @@ export default function Home() {
 
     <section id="work" className="border-y border-white/10 bg-[#151513] px-6 py-24 lg:px-10 lg:py-32">
       <div className="mx-auto max-w-7xl"><div className="flex items-end justify-between"><div><p className="eyebrow">02 — Selected work</p><h2 className="mt-5 font-display text-6xl">The archive</h2></div><span className="hidden text-xs uppercase tracking-[.2em] text-bone/40 sm:block">A small selection</span></div>
-        <div className="mt-14 grid gap-8 md:grid-cols-3">{work.map((item) => <article key={item.title} className="group"><div className="aspect-[4/5] overflow-hidden bg-ink"><Image src={item.image} alt="" width={1100} height={1375} sizes="(max-width: 768px) 100vw, 33vw" className="h-full w-full object-cover grayscale transition duration-700 group-hover:scale-105 group-hover:grayscale-0" /></div><p className="mt-4 text-[10px] uppercase tracking-[.2em] text-rust">{item.type}</p><h3 className="mt-2 font-display text-3xl">{item.title}</h3></article>)}</div>
+        {work.length ? (
+          <div className="mt-14 grid gap-8 md:grid-cols-3">{work.map((item) => <article key={item.slug} className="group"><div className="relative aspect-[4/5] overflow-hidden bg-ink"><Image src={`/api/archive/${encodeURIComponent(item.slug)}/image`} alt={item.altText} fill sizes="(max-width: 768px) 100vw, 33vw" unoptimized className="object-cover grayscale transition duration-700 group-hover:scale-105 group-hover:grayscale-0" /></div>{item.style && <p className="mt-4 text-[10px] uppercase tracking-[.2em] text-rust">{item.style}</p>}<h3 className="mt-2 font-display text-3xl">{item.title}</h3>{item.description && <p className="mt-3 max-w-md text-sm leading-6 text-bone/55">{item.description}</p>}</article>)}</div>
+        ) : <p className="mt-14 max-w-xl text-sm leading-7 text-bone/55">{archiveUnavailable ? "The studio archive is temporarily unavailable. Please check back soon." : "Selected work will appear here as it is added to the studio archive."}</p>}
       </div>
     </section>
 

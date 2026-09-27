@@ -150,3 +150,24 @@ model AuditLog {
   @@index([userId, createdAt])
   @@index([entityType, entityId])
 }
+
+model ArchiveArtwork {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  slug        String   @unique
+  description String?
+  style       String?
+  altText     String
+  storageKey  String   @unique
+  contentType String
+  featured    Boolean  @default(false)
+  published   Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([published])
+  @@index([featured])
+  @@index([sortOrder])
+  @@index([createdAt])
+}

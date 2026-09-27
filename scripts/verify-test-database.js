@@ -10,6 +10,7 @@ const requiredTables = [
   "BookingNote",
   "AuditLog",
   "Appointment",
+  "ArchiveArtwork",
 ];
 const expectedIdempotencyStatuses = ["COMPLETED", "PROCESSING"];
 
@@ -58,6 +59,32 @@ async function main() {
   if (missingColumns.length) throw new Error(`BookingRequest is missing expected idempotency columns: ${missingColumns.join(", ")}`);
   console.info("BookingRequest idempotency columns: verified");
 
+  const archiveColumnRows = await prisma.$queryRaw`
+    SELECT column_name AS name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'ArchiveArtwork'
+  `;
+  const archiveColumns = new Set(archiveColumnRows.map(({ name }) => name));
+  const requiredArchiveColumns = [
+    "title",
+    "slug",
+    "description",
+    "style",
+    "altText",
+    "storageKey",
+    "contentType",
+    "featured",
+    "published",
+    "sortOrder",
+    "createdAt",
+    "updatedAt",
+  ];
+  const missingArchiveColumns = requiredArchiveColumns.filter((column) => !archiveColumns.has(column));
+  if (missingArchiveColumns.length) {
+    throw new Error(`ArchiveArtwork is missing expected columns: ${missingArchiveColumns.join(", ")}`);
+  }
+  console.info("ArchiveArtwork fields: verified");
+
   const enumRows = await prisma.$queryRaw`
     SELECT t.typname AS name, array_agg(e.enumlabel ORDER BY e.enumsortorder) AS labels
     FROM pg_type t
@@ -90,6 +117,26 @@ async function main() {
   );
   if (!hasUniqueIdempotencyIndex) throw new Error("Unique PostgreSQL index on BookingRequest.idempotencyKey is missing.");
   console.info("PostgreSQL idempotency unique index: verified");
+
+  const archiveIndexRows = await prisma.$queryRaw`
+    SELECT array_agg(a.attname ORDER BY key.ordinality) AS columns
+    FROM pg_class table_class
+    JOIN pg_namespace namespace ON namespace.oid = table_class.relnamespace
+    JOIN pg_index i ON i.indrelid = table_class.oid
+    CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS key(attnum, ordinality)
+    JOIN pg_attribute a ON a.attrelid = table_class.oid AND a.attnum = key.attnum
+    WHERE namespace.nspname = 'public' AND table_class.relname = 'ArchiveArtwork'
+    GROUP BY i.indexrelid
+  `;
+  const archiveIndexedColumns = new Set(
+    archiveIndexRows.flatMap(({ columns }) => columns),
+  );
+  const missingArchiveIndexes = ["published", "featured", "sortOrder", "createdAt"]
+    .filter((column) => !archiveIndexedColumns.has(column));
+  if (missingArchiveIndexes.length) {
+    throw new Error(`ArchiveArtwork is missing expected indexes: ${missingArchiveIndexes.join(", ")}`);
+  }
+  console.info("ArchiveArtwork indexes: verified");
 
   const concurrentResults = await Promise.all(
     Array.from({ length: 5 }, () => prisma.$queryRaw`SELECT 1 AS value`),
