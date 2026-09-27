@@ -1,13 +1,79 @@
-# Production deployment checklist
+# Staging and production deployment checklist
 
-Passing local tests does not establish production configuration. Use these status labels when recording evidence:
+Passing local tests does not establish staging or production configuration. Record evidence with these status labels:
 
-- **VERIFIED** — directly tested in the environment and scope stated.
-- **NOT VERIFIED** — no adequate evidence is available.
-- **NOT APPLICABLE** — the requirement does not apply to the selected architecture; explain why.
-- **REQUIRES HUMAN/PROVIDER ACTION** — an operator or provider must configure or confirm it.
+- **VERIFIED** — directly tested in the named environment and scope.
+- **PASS — LOCAL ONLY** — passed locally; this is not staging evidence.
+- **PASS — STAGING** — directly passed against a positively identified staging resource.
+- **NOT VERIFIED** — the check has not been completed or lacks adequate evidence.
+- **NOT AVAILABLE** — the required staging resource or capability is not available.
+- **BLOCKED** — a prerequisite prevents a safe attempt.
+- **FAILED** — an attempted check failed; record the exact safe error and follow-up.
 
-Unchecked items below are **REQUIRES HUMAN/PROVIDER ACTION** until verified; they are not implicitly complete.
+Unchecked items are **NOT VERIFIED** unless explicitly marked otherwise. Do not mark a staging item complete unless it was tested against staging.
+
+## Current staging preparation status
+
+- **PASS — LOCAL ONLY:** local unit/security tests, PostgreSQL route integration, browser E2E, lint, production build, Prisma validation/generation, and isolated test-database migration/schema checks. These checks do not contact or validate staging providers.
+- **NOT AVAILABLE:** staging PostgreSQL, private S3-compatible bucket, Resend staging sender, Upstash staging Redis, and HTTPS staging hosting.
+- **NOT VERIFIED:** staging domain/DNS, HTTPS/cookies, proxy/client-IP behavior, provider behavior, and database backup/restore.
+- **BLOCKED:** live staging smoke tests until dedicated staging resources are provided and positively identified.
+
+No production or unknown external infrastructure is authorized by this checklist.
+
+## Required environment configuration
+
+All values must be supplied by the selected deployment platform's secret/environment configuration after each resource is positively identified as staging. Do not populate local secret files with unknown or production values. `.env.staging.example` is only a blank name template.
+
+| Group | Variable | Required for staging | Visibility / notes |
+|---|---|---|---|
+| DATABASE | `DATABASE_URL` | Required | Server-only secret. Dedicated staging PostgreSQL URL; never point at production or the local test database. |
+| AUTH/SESSION | No session secret variable | No separate value | Sessions use cryptographically random tokens, store token hashes and expiry in PostgreSQL, and use the database for validation. Provision a dedicated staging admin through the secure bootstrap procedure. |
+| AUTH/SESSION | `DEV_ADMIN_PASSWORD` | Must remain unset | Development seed only; do not seed deployment environments. |
+| PUBLIC SITE | `NEXT_PUBLIC_SITE_URL` | Required | Public, non-secret exact HTTPS origin for the staging deployment. Used for origin checks, metadata, and email links. |
+| PUBLIC SITE | `STUDIO_CONTACT_EMAIL` | Optional until supplied by the studio | Public, displayed as a `mailto:` link only when valid and non-empty. |
+| PUBLIC SITE | `STUDIO_CONTACT_PHONE` | Optional until supplied by the studio | Public, displayed as a `tel:` link only when valid and non-empty. |
+| PUBLIC SITE | `STUDIO_FACEBOOK_URL` | Optional until supplied by the studio | Public, displayed only for HTTPS Facebook/Messenger links on the allowlisted domains. |
+| STORAGE | `STORAGE_BUCKET` | Required for reference-image uploads | Server-only. Dedicated private staging bucket. |
+| STORAGE | `STORAGE_ACCESS_KEY_ID` | Required for reference-image uploads | Server-only, least-privilege staging credential. |
+| STORAGE | `STORAGE_SECRET_ACCESS_KEY` | Required for reference-image uploads | Server-only secret; never expose to the browser or logs. |
+| STORAGE | `STORAGE_REGION` | Optional if the SDK default `us-east-1` is correct | Server-side setting; provide the actual staging bucket region. |
+| STORAGE | `STORAGE_ENDPOINT` | Optional for AWS S3; required when the chosen compatible service needs a custom endpoint | Server-side endpoint, only for a positively identified staging service. |
+| STORAGE | `STORAGE_FORCE_PATH_STYLE` | Optional; default is `false` | Server-side boolean; enable only if the selected staging storage requires path-style addressing. |
+| EMAIL | `RESEND_API_KEY` | Optional for accepting bookings; required to verify/send staging email | Server-only staging key. Booking persistence does not depend on configured email. |
+| EMAIL | `EMAIL_FROM` | Optional for accepting bookings; required to send email | Sender must be verified/authorized by the email provider. |
+| EMAIL | `ADMIN_NOTIFICATION_EMAIL` | Required for studio notification coverage; otherwise optional at runtime | Use an explicitly controlled staging recipient, never a customer. |
+| EMAIL | `EMAIL_REPLY_TO` | Optional | Use only an approved staging reply-to address. |
+| RATE LIMITING | `UPSTASH_REDIS_REST_URL` | Required in production mode, including a production-mode staging deployment | Server-only URL for dedicated staging Redis. |
+| RATE LIMITING | `UPSTASH_REDIS_REST_TOKEN` | Required in production mode, including a production-mode staging deployment | Server-only staging secret. Missing/unavailable Upstash fails closed in production mode. |
+| SECURITY/PROXY | `TRUST_PROXY_HEADERS` | Optional; keep `false` unless verified | Set to `true` only after proving the staging proxy overwrites forwarded headers. Otherwise proxy headers are ignored. |
+| OTHER | `NODE_ENV` | Platform-managed | Must be `production` for production-mode security behavior; never use test/development mode in a deployed staging environment. |
+| OTHER | `PORT` | Platform-managed/optional | Use the port assigned by the selected host; no provider or port is assumed here. |
+| OTHER | `DATABASE_URL_TEST` | Must not be configured for deployment | Local test-only URL. Guarded test scripts require the exact local disposable test target and do not fall back to `DATABASE_URL`. |
+
+An unset optional feature configuration is not proof that feature behavior works. If image uploads, email, or rate limiting are part of staging sign-off, configure and test their dedicated staging resources first. Resend is best-effort: missing configuration or a provider failure is logged safely and does not roll back the persisted booking or status change. Without email, arrange another monitored way for the studio to receive booking notifications before accepting real inquiries.
+
+## Safe staging deployment procedure
+
+1. Obtain explicit confirmation that the PostgreSQL database, bucket, Redis instance, email sender/recipient, and hostname are dedicated to staging and are separate from production. If any target is ambiguous, stop.
+2. Add only the required staging values to the host's secret store. Do not place secrets in Git, command-line arguments, build output, or logs. Configure `DATABASE_URL` and `NEXT_PUBLIC_SITE_URL` for the same staging environment. Do not configure `DATABASE_URL_TEST` or `DEV_ADMIN_PASSWORD` on the deployment.
+3. Build the application with the selected supported Node.js runtime using `npm ci` and `npm run build`; start it with `npm run start` or the host's documented equivalent. Confirm the host-assigned port/interface behavior. Do not run schema migrations automatically as part of application startup.
+4. Run migrations as a separately approved, single staging release step in an environment where the staging `DATABASE_URL` is injected by the secret manager:
+
+   ```text
+   npx prisma migrate status
+   npx prisma migrate deploy
+   npx prisma migrate status
+   ```
+
+   Before applying, review every pending migration and confirm the database identity through the approved platform console/connection metadata without printing the URL. Take/confirm the required staging backup and obtain approval. If the target is uncertain, status is unexpected, or a migration needs review, stop. `migrate deploy` applies committed migrations; it does not create migrations or reset the database. Never use `prisma migrate reset`, `db push`, or `migrate dev` as a staging deployment procedure. No migration command has been run against staging as part of this preparation.
+5. Confirm the public HTTPS origin, valid certificate, redirects, and response headers on the actual staging hostname. Test admin mutations with correct, missing, and unrelated `Origin` headers; the expected origin must match exactly. Do not enable `TRUST_PROXY_HEADERS` until the actual proxy behavior is verified.
+6. Using only a dedicated staging admin and a controlled synthetic email recipient, run a browser booking smoke test and verify persistence, idempotent retry, admin access/status/note/audit flow, and expected notifications. Verify unauthenticated admin access is denied. Do not use real customer data.
+7. If image uploads are in scope, upload only a synthetic JPEG/PNG/WebP file; verify validation, private bucket policy, authenticated short-lived signed reads, anonymous access denial, and cleanup. Do not use real customer images.
+8. Verify staging Upstash limits and production-mode fail-closed behavior against the dedicated staging instance. Confirm source-IP identification behind the deployed proxy; `unknown` is a shared source bucket and can throttle multiple clients together.
+9. Inspect the relevant staging logs for sensitive data and review provider delivery/retention/backup evidence. Record each result as **PASS — STAGING**, **FAILED**, **NOT VERIFIED**, **NOT AVAILABLE**, or **BLOCKED** with safe evidence; do not include credentials, URLs containing credentials, customer data, session tokens, or signed URLs.
+
+The repository has no dedicated health/readiness endpoint. A generic process health check would not prove database, storage, email, or rate-limit readiness. Use the host's liveness facility if needed, then verify readiness through the staged migration status and controlled functional smoke flow above. No health endpoint is added as part of preparation.
 
 ## Application
 
@@ -59,7 +125,7 @@ Unchecked items below are **REQUIRES HUMAN/PROVIDER ACTION** until verified; the
 
 - [ ] Verify secure session cookies, authentication, authorization, and logout behavior over production HTTPS.
 - [ ] Verify mutation Origin configuration and rejection behavior for the production site URL.
-- [ ] Verify response security headers and that all production subdomains support HTTPS before enabling HSTS with `includeSubDomains`.
+- [ ] Verify response security headers and ensure every production subdomain supports HTTPS. The application sends production HSTS with `includeSubDomains`; do not deploy it under a production hostname until that requirement is met.
 - [ ] Review secret exposure, rotation, access, and incident response procedures.
 - [ ] Create the initial administrator using a unique strong password through the approved bootstrap procedure.
 - [ ] Confirm no development seed or default/test credentials are used in production.
@@ -77,13 +143,12 @@ Unchecked items below are **REQUIRES HUMAN/PROVIDER ACTION** until verified; the
 
 ## Verification status
 
-- **VERIFIED (local/test only):** Unit tests, route integration, browser E2E, production build, lint, Prisma validation/generation, and isolated PostgreSQL migrations/schema checks. See the Phase 2J.7 audit report for the exact run results.
-- **NOT VERIFIED:** Staging PostgreSQL, S3, Resend, Upstash, hosting, domain/DNS, HTTPS, backups/restore, provider retention, and monitoring. The only database positively classified in this phase was local disposable PostgreSQL. No external provider or deployment was contacted.
-- **REQUIRES OPERATOR ACTION:** Supply and positively identify a dedicated staging database, private bucket, isolated Redis, test email sender and controlled recipients, and HTTPS staging host. Do not use a non-local `DATABASE_URL` until its environment and resource are established.
-- **NOT APPLICABLE:** None established in this phase.
-- **VERIFIED (configuration only):** Development seed blocks production execution and requires an explicit password; security/error-category regression tests pass. This does not verify staging administrator creation or deployed behavior.
+- **PASS — LOCAL ONLY:** The local test suite and isolated test database checks have been run; they do not verify any live provider or staging deployment.
+- **NOT AVAILABLE:** Staging PostgreSQL, S3-compatible storage, Resend, Upstash, HTTPS hosting, and staging DNS/domain have not been supplied/positively identified.
+- **NOT VERIFIED:** Staging deployment, proxy/client-IP behavior, cookies over HTTPS, provider policies, backups/restore, retention, and monitoring.
+- **BLOCKED:** Staging smoke and sign-off until dedicated staging resources are provided and their identity is confirmed.
 
-The blank [.env.staging.example](./.env.staging.example) is a variable-name template, not evidence that staging resources exist. Keep the per-environment checklist items above unchecked until their actual resources are verified.
+The blank [.env.staging.example](./.env.staging.example) is a variable-name template, not evidence that staging resources exist. Keep all staging verification items unchecked until tested against the actual staging resources.
 
 ## Abandoned `PROCESSING` booking procedure
 

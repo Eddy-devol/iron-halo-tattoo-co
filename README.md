@@ -14,15 +14,17 @@ Then open `http://localhost:3000`. Use `npm run lint` and `npm run build` for va
 
 ## Database foundation
 
-Phase 2A includes a PostgreSQL Prisma schema and initial migration. Set `DATABASE_URL` in `.env.local`, then run:
+The repository contains the current PostgreSQL Prisma schema and committed migrations. Set `DATABASE_URL` in the ignored `.env.local` for the Next.js application, and provide the same intended local development URL to Prisma CLI commands through the process environment or a Prisma-loaded `.env` file. Prisma CLI does not load `.env.local`. Never use `DATABASE_URL_TEST` for ordinary development or deployment.
 
 ```bash
 npm run db:generate
-npm run db:migrate -- --name init
+npx prisma migrate deploy
 npm run db:seed
 ```
 
-The seed uses only `admin@example.test` and `test@example.test`. It is disabled when `NODE_ENV=production` and requires a unique `DEV_ADMIN_PASSWORD` of at least 12 characters; there is no default password. Set it only in your local shell before `npm run db:seed`, and do not reuse it in production.
+`npx prisma migrate deploy` applies only committed migrations and does not create a migration or reset the database. Use `npm run db:migrate -- --name <description>` only when intentionally authoring a new migration against a local development database. Never use `prisma migrate reset` against staging or production. See [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md) for the controlled staging procedure.
+
+The development seed uses only `admin@example.test` and `test@example.test`. It is disabled when `NODE_ENV=production` and requires a unique `DEV_ADMIN_PASSWORD` of at least 12 characters; there is no default password. Set it only in your local shell before `npm run db:seed`, and do not reuse it in staging or production. Create deployment administrators through the approved secure bootstrap process.
 
 ## Admin bootstrap
 
@@ -37,6 +39,14 @@ On interactive Windows PowerShell, VS Code, and compatible TTYs, password input 
 See [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md) before planning a production deployment. It records configuration and operational checks that are still unverified; passing code tests does not mean infrastructure is configured.
 
 For staging planning, [.env.staging.example](./.env.staging.example) lists the expected variable names with blank values only. Copy it to an ignored local file and populate it only with resources confirmed to be isolated staging resources. Never copy production credentials into staging. `DEV_ADMIN_PASSWORD` is for local development seeding only; create a staging administrator through the secure admin bootstrap process.
+
+`prisma validate` needs a syntactically valid `DATABASE_URL` in its process environment but does not connect to that database. For offline schema validation, supply a process-scoped, non-routable placeholder URL; do not replace `DATABASE_URL` with `DATABASE_URL_TEST`. Database commands such as `migrate status` and `migrate deploy` do connect and must run only in the intended environment with its approved secret injected.
+
+## Studio contact and customer confirmations
+
+`STUDIO_CONTACT_EMAIL`, `STUDIO_CONTACT_PHONE`, and `STUDIO_FACEBOOK_URL` are optional public display settings. Set only contact details supplied by the studio; do not use placeholders. Valid configured methods appear on the public site and booking confirmation, while blank or invalid values are omitted. Facebook/Messenger links must use HTTPS and an approved Facebook/Messenger hostname.
+
+Resend remains optional for accepting bookings. Booking data is persisted before the application attempts email delivery; missing email configuration or a provider failure does not roll back that booking or a status change. Configure `RESEND_API_KEY` and `EMAIL_FROM` to enable transactional sending, with `ADMIN_NOTIFICATION_EMAIL` set to a controlled studio inbox. Before accepting real inquiries without email enabled, ensure there is another monitored way to review incoming bookings.
 
 ## Routes
 
@@ -122,7 +132,7 @@ Current local code verification:
 
 - lint: passing
 - production build: passing
-- Prisma validation/generation: required verification commands
+- Prisma validation/generation: passing when Prisma CLI is given a process-scoped syntactically valid `DATABASE_URL`
 - Vitest unit/security suites: passing
 
 ### Isolated PostgreSQL test database

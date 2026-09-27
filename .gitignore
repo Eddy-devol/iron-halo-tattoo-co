@@ -2,9 +2,10 @@ node_modules
 .next
 out
 .env
-.env.local
-.env.test
-.env.*.local
+.env.*
+!.env.example
+!.env.test.example
+!.env.staging.example
 /test-results/
 /playwright-report/
 /coverage/

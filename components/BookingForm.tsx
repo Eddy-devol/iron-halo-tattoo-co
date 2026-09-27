@@ -1,10 +1,11 @@
 ﻿"use client";
 
 import { FormEvent, useRef, useState } from "react";
+import type { StudioContactDetails } from "@/lib/studio-contact";
 
 type State = "idle" | "sending" | "success" | "error";
 
-export default function BookingForm() {
+export default function BookingForm({ contact }: { contact: StudioContactDetails }) {
   const [state, setState] = useState<State>("idle");
   const [reference, setReference] = useState("");
   const idempotencyKey = useRef("");
@@ -38,11 +39,21 @@ export default function BookingForm() {
         <p className="eyebrow">REQUEST RECEIVED</p>
         <h2 className="mt-5 font-display text-5xl">Thank you.</h2>
         <p className="mt-5 text-sm leading-7 text-bone/65">
-          Your booking request has been submitted successfully. We will review your request and contact you with the next steps.
+          Your booking request has been received. We will review your request before an appointment is confirmed. This request is not an instantly confirmed appointment.
         </p>
         <p className="mt-8 border-t border-rust/30 pt-5 text-xs uppercase tracking-[.2em] text-bone/55">
           Reference <strong className="ml-2 text-bone">{reference}</strong>
         </p>
+        {(contact.email || contact.phone || contact.facebook) && (
+          <div className="mt-8 border-t border-rust/30 pt-5">
+            <p className="text-sm leading-6 text-bone/65">If you would like to discuss your idea directly, you can also contact the studio:</p>
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-3 text-xs uppercase tracking-[.16em]">
+              {contact.email && <a className="text-bone/70 underline decoration-rust/60 underline-offset-4 hover:text-bone" href={contact.email.href}>Email</a>}
+              {contact.phone && <a className="text-bone/70 underline decoration-rust/60 underline-offset-4 hover:text-bone" href={contact.phone.href}>Phone</a>}
+              {contact.facebook && <a className="text-bone/70 underline decoration-rust/60 underline-offset-4 hover:text-bone" href={contact.facebook.href} target="_blank" rel="noopener noreferrer">Facebook / Messenger</a>}
+            </div>
+          </div>
+        )}
         <button type="button" onClick={() => setState("idle")} className="button-quiet mt-8">Send another</button>
       </div>
     );

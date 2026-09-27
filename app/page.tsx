@@ -1,5 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
+import { resolveStudioContactDetails } from "@/lib/studio-contact";
+
+export const dynamic = "force-dynamic";
 
 const work = [
   { title: "Blackwork / étude no. 07", type: "Custom study", image: "https://images.unsplash.com/photo-1542727365-19732a80dcfd?auto=format&fit=crop&w=1100&q=85" },
@@ -8,6 +11,12 @@ const work = [
 ];
 
 export default function Home() {
+  const contact = resolveStudioContactDetails({
+    email: process.env.STUDIO_CONTACT_EMAIL,
+    phone: process.env.STUDIO_CONTACT_PHONE,
+    facebookUrl: process.env.STUDIO_FACEBOOK_URL,
+  });
+
   return <main>
     <header className="absolute inset-x-0 top-0 z-10 border-b border-white/10">
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 lg:px-10" aria-label="Main navigation">
@@ -41,6 +50,6 @@ export default function Home() {
     </section>
 
     <section id="process" className="mx-auto max-w-7xl px-6 py-24 lg:px-10 lg:py-36"><div className="grid gap-12 lg:grid-cols-[.8fr_1.2fr]"><div><p className="eyebrow">03 — The process</p><h2 className="mt-6 font-display text-6xl leading-[.9]">Good work<br /><em className="text-rust">takes time.</em></h2></div><ol className="divide-y divide-white/15 border-y border-white/15">{["Tell us what you’re carrying.", "Build the right shape together.", "Make space for the mark."].map((step, i) => <li key={step} className="flex items-center gap-8 py-7"><span className="font-display text-2xl text-rust">0{i + 1}</span><span className="font-display text-3xl">{step}</span></li>)}</ol></div></section>
-    <footer className="border-t border-white/10 px-6 py-10 lg:px-10"><div className="mx-auto flex max-w-7xl flex-col justify-between gap-5 text-xs uppercase tracking-[.18em] text-bone/40 sm:flex-row"><span>© {new Date().getFullYear()} Iron Halo Tattoo Co.</span><span>Location + hours — to be confirmed</span><Link href="/admin" className="hover:text-bone">Studio login</Link></div></footer>
+    <footer className="border-t border-white/10 px-6 py-10 lg:px-10"><div className="mx-auto flex max-w-7xl flex-col justify-between gap-5 text-xs uppercase tracking-[.18em] text-bone/40 sm:flex-row sm:items-center"><span>© {new Date().getFullYear()} Iron Halo Tattoo Co.</span><div className="flex flex-wrap gap-x-5 gap-y-3"><span>Location + hours — to be confirmed</span>{contact.email && <a className="hover:text-bone" href={contact.email.href}>Email</a>}{contact.phone && <a className="hover:text-bone" href={contact.phone.href}>Phone</a>}{contact.facebook && <a className="hover:text-bone" href={contact.facebook.href} target="_blank" rel="noopener noreferrer">Facebook / Messenger</a>}<Link href="/admin" className="hover:text-bone">Studio login</Link></div></div></footer>
   </main>;
 }
