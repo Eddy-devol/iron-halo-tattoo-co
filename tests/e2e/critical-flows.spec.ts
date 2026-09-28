@@ -12,6 +12,7 @@ const adminPassword = `Synthetic-E2E-${randomUUID()}-Only`;
 const bookingName = `Phase 2J.5 Synthetic ${runId.slice(0, 8)}`;
 const bookingEmail = `phase2j5-booking-${runId}@example.test`;
 let adminId: string;
+let bookingReference: string | undefined;
 let prisma: PrismaClient | undefined;
 
 function assertIsolatedTestTarget(rawUrl: string | undefined, variableName: string) {
@@ -52,6 +53,11 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   if (prisma && adminId) {
+    if (bookingReference) {
+      await prisma.auditLog.deleteMany({
+        where: { entityType: "BookingRequest", entityId: bookingReference },
+      });
+    }
     const bookings = await prisma.bookingRequest.findMany({
       where: { email: bookingEmail },
       select: { id: true, referenceNumber: true },
@@ -137,6 +143,7 @@ test("public booking retry and authenticated admin workflow", async ({ page }) =
   await expect(page.getByText(/appointment confirmed/i)).toHaveCount(0);
 
   const reference = (await page.locator("strong").innerText()).trim();
+  bookingReference = reference;
   expect(reference).toMatch(/^IH-\d{4}-[A-Z2-9]{6}$/);
   expect(bookingKeys).toHaveLength(2);
   expect(bookingKeys[0]).toBeTruthy();
@@ -186,7 +193,7 @@ test("public booking retry and authenticated admin workflow", async ({ page }) =
   await expect(row).toBeVisible();
   await row.getByRole("link", { name: "View" }).click();
   await expect(page.getByRole("heading", { name: bookingName })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(reference)).toBeVisible();
+  await expect(page.getByText(reference).first()).toBeVisible();
   await expect(page.getByText("Synthetic browser test request, not a real tattoo inquiry.")).toBeVisible();
   await expect(page.getByText(/passwordHash|session token|storage credentials/i)).toHaveCount(0);
 
@@ -213,6 +220,55 @@ test("public booking retry and authenticated admin workflow", async ({ page }) =
   await page.reload();
   await expect(noteParagraph).toBeVisible();
   expect(await prisma.bookingNote.count({ where: { bookingRequestId: storedBooking!.id, authorId: adminId } })).toBe(1);
+
+  const paymentPlan = await prisma.paymentPlan.create({
+    data: {
+      bookingRequestId: storedBooking!.id,
+      totalAmount: "100.00",
+      currency: "USD",
+      installmentCount: 1,
+      status: "ACTIVE",
+    },
+  });
+  await prisma.payment.create({
+    data: {
+      paymentPlanId: paymentPlan.id,
+      recordedById: adminId,
+      receiptNumber: `E2E-${runId}`,
+      amount: "25.00",
+      balanceAfter: "75.00",
+      currency: "USD",
+      method: "CASH",
+      paidAt: new Date(),
+    },
+  });
+  expect(await prisma.payment.count({ where: { paymentPlanId: paymentPlan.id } })).toBe(1);
+  await expect(page.getByRole("button", { name: "Delete booking" })).toBeVisible();
+  await page.getByRole("button", { name: "Delete booking" }).click();
+  const deleteDialog = page.getByRole("dialog");
+  await expect(deleteDialog.getByRole("heading", { name: "Delete this booking request permanently?" })).toBeVisible();
+  await expect(deleteDialog.getByText(reference)).toBeVisible();
+  await expect(deleteDialog.getByText(/payment records and plan/)).toBeVisible();
+  await deleteDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(deleteDialog).toBeHidden();
+  await page.getByRole("button", { name: "Delete booking" }).click();
+  await expect(deleteDialog).toBeVisible();
+  const deleteResponsePromise = page.waitForResponse((response) =>
+    response.url().endsWith(`/api/admin/bookings/${storedBooking!.id}`) &&
+    response.request().method() === "DELETE",
+  );
+  await deleteDialog.getByRole("button", { name: "Delete permanently" }).click();
+  const deleteResponse = await deleteResponsePromise;
+  expect(deleteResponse.status()).toBe(200);
+  await page.waitForURL("**/admin?deleted=1");
+  await expect(page.getByText("The booking request was permanently deleted.")).toBeVisible();
+  expect(await prisma.bookingRequest.findUnique({ where: { id: storedBooking!.id } })).toBeNull();
+  expect(await prisma.payment.count({ where: { paymentPlanId: paymentPlan.id } })).toBe(0);
+  await page.getByLabel("Search reference, name, email, or phone").fill(reference);
+  await page.getByRole("button", { name: "Search" }).click();
+  await expect(page.getByRole("row").filter({ hasText: reference })).toHaveCount(0);
+  await page.goto(`/admin/bookings/${storedBooking!.id}`);
+  await expect(page.getByText("Booking not found.", { exact: true })).toBeVisible();
 
   const artistListResponsePromise = page.waitForResponse((response) =>
     response.url().endsWith("/api/admin/artists") && response.request().method() === "GET",

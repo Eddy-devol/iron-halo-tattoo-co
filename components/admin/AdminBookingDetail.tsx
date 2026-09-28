@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { BookingStatus } from "@prisma/client";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import AdminHeader from "@/components/admin/AdminHeader";
 import AdminBookingDocumentsAndPayments from "@/components/admin/AdminBookingDocumentsAndPayments";
 import StatusBadge from "@/components/StatusBadge";
@@ -86,6 +87,8 @@ function DetailField({ label, value, className = "" }: { label: string; value: s
 }
 
 export default function AdminBookingDetail({ bookingId }: { bookingId: string }) {
+  const router = useRouter();
+  const confirmationDialog = useRef<HTMLDialogElement>(null);
   const [booking, setBooking] = useState<BookingDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -95,6 +98,16 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteError, setNoteError] = useState("");
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
+  const [deleteSaving, setDeleteSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  useEffect(() => {
+    const dialog = confirmationDialog.current;
+    if (!dialog) return;
+    if (deleteConfirmationOpen && !dialog.open) dialog.showModal();
+    if (!deleteConfirmationOpen && dialog.open) dialog.close();
+  }, [deleteConfirmationOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -165,6 +178,26 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
       setNoteError(saveError instanceof Error ? saveError.message : "Unable to add internal note.");
     } finally {
       setNoteSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!booking) return;
+
+    setDeleteSaving(true);
+    setDeleteError("");
+    try {
+      const response = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
+        method: "DELETE",
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Unable to delete booking.");
+      setDeleteConfirmationOpen(false);
+      router.push(`/admin?deleted=1${payload.cleanupPending ? "&cleanupPending=1" : ""}`);
+    } catch (deleteError) {
+      setDeleteError(deleteError instanceof Error ? deleteError.message : "Unable to delete booking.");
+    } finally {
+      setDeleteSaving(false);
     }
   }
 
@@ -327,6 +360,69 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
               artistName={booking.artistName}
               consentRecord={booking.consentRecord}
             />
+
+            <section className="mt-12 border-t border-rust/30 pt-8">
+              <h2 className="font-display text-3xl">Delete booking request</h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-ink/60">
+                Permanently remove this request and its associated records.
+              </p>
+              {deleteError && <p className="mt-3 text-sm text-rust" role="alert">{deleteError}</p>}
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteError("");
+                  setDeleteConfirmationOpen(true);
+                }}
+                disabled={deleteSaving}
+                className="mt-5 inline-flex min-h-11 items-center justify-center border border-rust bg-rust px-5 py-3 text-[10px] font-bold uppercase tracking-[.14em] text-bone transition-colors hover:bg-rust/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rust disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Delete booking
+              </button>
+              <dialog
+                ref={confirmationDialog}
+                aria-labelledby="delete-booking-title"
+                aria-describedby="delete-booking-description"
+                onCancel={(event) => {
+                  event.preventDefault();
+                  if (!deleteSaving) setDeleteConfirmationOpen(false);
+                }}
+                className="w-[min(calc(100%-2rem),34rem)] border border-ink/15 bg-[#f1ede5] p-0 text-ink shadow-2xl backdrop:bg-ink/70"
+              >
+                <div className="p-6 sm:p-8">
+                  <p className="eyebrow">Permanent action</p>
+                  <h3 id="delete-booking-title" className="mt-3 font-display text-3xl">
+                    Delete this booking request permanently?
+                  </h3>
+                  <p className="mt-3 text-xs font-semibold uppercase tracking-[.15em] text-ink/55">
+                    {booking.referenceNumber}
+                  </p>
+                  <p id="delete-booking-description" className="mt-5 text-sm leading-6 text-ink/70">
+                    This will permanently remove the booking request, its notes and history, payment records and plan,
+                    consent record, client access records, and private reference images. This action cannot be undone.
+                  </p>
+                  {deleteError && <p className="mt-4 text-sm text-rust" role="alert">{deleteError}</p>}
+                  <div className="mt-7 flex flex-wrap justify-end gap-3">
+                    <button
+                      type="button"
+                      autoFocus
+                      onClick={() => setDeleteConfirmationOpen(false)}
+                      disabled={deleteSaving}
+                      className="button-quiet !border-ink/35 !px-5 !py-3 !text-[10px] !tracking-[.14em] text-ink disabled:opacity-45"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete()}
+                      disabled={deleteSaving}
+                      className="inline-flex min-h-11 items-center justify-center border border-rust bg-rust px-5 py-3 text-[10px] font-bold uppercase tracking-[.14em] text-bone transition-colors hover:bg-rust/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rust disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {deleteSaving ? "Deleting…" : "Delete permanently"}
+                    </button>
+                  </div>
+                </div>
+              </dialog>
+            </section>
           </>
         ) : null}
       </div>

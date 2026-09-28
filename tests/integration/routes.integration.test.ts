@@ -8,7 +8,7 @@ const { cookieState, sendNewNotifications, sendStatusNotification, uploadObject,
   sendNewNotifications: vi.fn(async () => undefined),
   sendStatusNotification: vi.fn(async () => undefined),
   uploadObject: vi.fn(async () => undefined),
-  deleteObject: vi.fn(async () => undefined),
+  deleteObject: vi.fn(async (_key: string) => undefined),
 }));
 
 vi.mock("next/headers", () => ({
@@ -40,12 +40,14 @@ import { POST as publicBooking } from "@/app/api/bookings/route";
 import { POST as login } from "@/app/api/admin/login/route";
 import { POST as logout } from "@/app/api/admin/logout/route";
 import { GET as bookingList } from "@/app/api/admin/bookings/route";
-import { GET as bookingDetail, PATCH as updateBooking } from "@/app/api/admin/bookings/[id]/route";
+import { DELETE as deleteBooking, GET as bookingDetail, PATCH as updateBooking } from "@/app/api/admin/bookings/[id]/route";
 import { POST as createNote } from "@/app/api/admin/bookings/[id]/notes/route";
+import { enforceRateLimit } from "@/lib/server/security";
 
 const prisma = new PrismaClient();
 const origin = "http://localhost:3000";
 const syntheticPrefix = `phase2j4-${randomUUID()}`;
+const syntheticAuditReferences: string[] = [];
 let adminId: string;
 let adminEmail: string;
 
@@ -82,6 +84,23 @@ function mutationRequest(url: string, body: unknown, headers: Record<string, str
   });
 }
 
+function deleteRequest(url: string, headers: Record<string, string> = {}, body?: unknown) {
+  return new Request(url, {
+    method: "DELETE",
+    headers: { Origin: origin, ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...headers },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+async function authenticateTestAdmin() {
+  const form = new FormData();
+  form.set("email", adminEmail);
+  form.set("password", "synthetic-test-password");
+  const response = await login(new Request("http://localhost/api/admin/login", { method: "POST", body: form }));
+  expect(response.status).toBe(200);
+  cookieState.token = decodeURIComponent(sessionCookie(response)!);
+}
+
 function sessionCookie(response: Response) {
   const cookie = response.headers.get("set-cookie");
   expect(cookie).toBeTruthy();
@@ -110,6 +129,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   cookieState.token = undefined;
+  syntheticAuditReferences.length = 0;
   vi.clearAllMocks();
 });
 
@@ -129,6 +149,11 @@ afterEach(async () => {
     });
     await prisma.bookingRequest.deleteMany({ where: { id: { in: bookings.map(({ id }) => id) } } });
   }
+  await prisma.auditLog.deleteMany({
+    where: { entityType: "BookingRequest", entityId: { in: syntheticAuditReferences } },
+  });
+  await prisma.artist.deleteMany({ where: { slug: { startsWith: syntheticPrefix } } });
+  await prisma.archiveArtwork.deleteMany({ where: { slug: { startsWith: syntheticPrefix } } });
   await prisma.session.deleteMany({ where: { userId: adminId } });
 });
 
@@ -318,17 +343,225 @@ describe("real PostgreSQL route integration", () => {
     expect((await bookingDetail(new Request(`http://localhost/api/admin/bookings/${id}`), { params: { id } })).status).toBe(401);
     expect((await updateBooking(mutationRequest(`http://localhost/api/admin/bookings/${id}`, { status: "REVIEWING" }), { params: { id } })).status).toBe(401);
     expect((await createNote(mutationRequest(`http://localhost/api/admin/bookings/${id}/notes`, { body: "Synthetic" }), { params: { id } })).status).toBe(401);
+    expect((await deleteBooking(deleteRequest(`http://localhost/api/admin/bookings/${id}`), { params: { id } })).status).toBe(401);
 
-    const form = new FormData();
-    form.set("email", adminEmail);
-    form.set("password", "synthetic-test-password");
-    const loginResponse = await login(new Request("http://localhost/api/admin/login", { method: "POST", body: form }));
-    cookieState.token = decodeURIComponent(sessionCookie(loginResponse)!);
+    await authenticateTestAdmin();
 
     expect((await bookingDetail(new Request("http://localhost/api/admin/bookings/not-a-uuid"), { params: { id: "not-a-uuid" } })).status).toBe(400);
     expect((await bookingDetail(new Request(`http://localhost/api/admin/bookings/${id}`), { params: { id } })).status).toBe(404);
     expect((await updateBooking(mutationRequest(`http://localhost/api/admin/bookings/${id}`, { status: "REVIEWING" }), { params: { id } })).status).toBe(404);
     expect((await createNote(mutationRequest(`http://localhost/api/admin/bookings/${id}/notes`, { body: "Synthetic" }), { params: { id } })).status).toBe(404);
+    expect((await deleteBooking(deleteRequest(`http://localhost/api/admin/bookings/${id}`), { params: { id } })).status).toBe(404);
+  });
+
+  it("enforces origin and rate limits for booking deletion", async () => {
+    const id = randomUUID();
+    await authenticateTestAdmin();
+
+    const rejectedOrigin = await deleteBooking(
+      deleteRequest(`http://localhost/api/admin/bookings/${id}`, { Origin: "https://attacker.example.test" }),
+      { params: { id } },
+    );
+    expect(rejectedOrigin.status).toBe(403);
+
+    vi.mocked(enforceRateLimit).mockResolvedValueOnce({ allowed: false, retryAfter: 60 });
+    const rateLimited = await deleteBooking(deleteRequest(`http://localhost/api/admin/bookings/${id}`), { params: { id } });
+    expect(rateLimited.status).toBe(429);
+    expect(rateLimited.headers.get("Retry-After")).toBe("60");
+  });
+
+  it("permanently deletes only the selected booking graph and cleans its trusted reference images", async () => {
+    const targetEmail = `${syntheticPrefix}-delete-target@example.test`;
+    const otherEmail = `${syntheticPrefix}-delete-other@example.test`;
+    const targetResponse = await submitBooking(targetEmail, `${syntheticPrefix}-delete-target`);
+    const otherResponse = await submitBooking(otherEmail, `${syntheticPrefix}-delete-other`);
+    const targetReference = (await targetResponse.json()).referenceNumber as string;
+    const otherReference = (await otherResponse.json()).referenceNumber as string;
+    syntheticAuditReferences.push(targetReference, otherReference);
+    const [target, other] = await Promise.all([
+      prisma.bookingRequest.findUniqueOrThrow({ where: { referenceNumber: targetReference } }),
+      prisma.bookingRequest.findUniqueOrThrow({ where: { referenceNumber: otherReference } }),
+    ]);
+    const targetStorageKey = `booking-reference-images/${target.id}/${randomUUID()}.png`;
+    const otherStorageKey = `booking-reference-images/${other.id}/${randomUUID()}.png`;
+
+    await prisma.bookingReferenceImage.createMany({
+      data: [
+        { bookingRequestId: target.id, storageKey: targetStorageKey, originalFilename: "target.png", mimeType: "image/png", fileSize: 8 },
+        { bookingRequestId: other.id, storageKey: otherStorageKey, originalFilename: "other.png", mimeType: "image/png", fileSize: 8 },
+      ],
+    });
+    await prisma.bookingNote.create({ data: { bookingRequestId: target.id, authorId: adminId, body: "Synthetic note" } });
+    await prisma.appointment.create({
+      data: { bookingRequestId: target.id, startAt: new Date("2030-01-01T10:00:00Z"), endAt: new Date("2030-01-01T11:00:00Z") },
+    });
+    await prisma.tattooConsentRecord.create({
+      data: { bookingRequestId: target.id, legalName: "Synthetic Client", status: "COMPLETED", consentTextSnapshot: "Synthetic consent" },
+    });
+    await prisma.clientAccessToken.create({
+      data: { bookingRequestId: target.id, tokenHash: randomUUID(), expiresAt: new Date("2030-01-01T00:00:00Z") },
+    });
+    await prisma.clientSession.create({
+      data: { bookingRequestId: target.id, tokenHash: randomUUID(), expiresAt: new Date("2030-01-01T00:00:00Z") },
+    });
+    const targetPlan = await prisma.paymentPlan.create({
+      data: { bookingRequestId: target.id, totalAmount: "100.00", currency: "USD", installmentCount: 1, status: "ACTIVE" },
+    });
+    const targetInstallment = await prisma.paymentInstallment.create({
+      data: {
+        paymentPlanId: targetPlan.id,
+        installmentNumber: 1,
+        dueDate: new Date("2030-01-01T00:00:00Z"),
+        amount: "100.00",
+        status: "PAID",
+      },
+    });
+    await prisma.payment.create({
+      data: {
+        paymentPlanId: targetPlan.id,
+        installmentId: targetInstallment.id,
+        recordedById: adminId,
+        receiptNumber: `${syntheticPrefix}-target-receipt`,
+        amount: "100.00",
+        balanceAfter: "0.00",
+        currency: "USD",
+        method: "CASH",
+        paidAt: new Date("2029-01-01T00:00:00Z"),
+      },
+    });
+    const otherPlan = await prisma.paymentPlan.create({
+      data: { bookingRequestId: other.id, totalAmount: "50.00", currency: "USD", installmentCount: 1 },
+    });
+    const otherInstallment = await prisma.paymentInstallment.create({
+      data: {
+        paymentPlanId: otherPlan.id,
+        installmentNumber: 1,
+        dueDate: new Date("2030-02-01T00:00:00Z"),
+        amount: "50.00",
+      },
+    });
+    await prisma.payment.create({
+      data: {
+        paymentPlanId: otherPlan.id,
+        installmentId: otherInstallment.id,
+        recordedById: adminId,
+        receiptNumber: `${syntheticPrefix}-other-receipt`,
+        amount: "10.00",
+        balanceAfter: "40.00",
+        currency: "USD",
+        method: "CASH",
+        paidAt: new Date("2029-02-01T00:00:00Z"),
+      },
+    });
+    await prisma.auditLog.create({
+      data: {
+        userId: adminId,
+        action: "BOOKING_STATUS_UPDATED",
+        entityType: "BookingRequest",
+        entityId: target.id,
+        metadata: { previousStatus: "PENDING", newStatus: "REVIEWING" },
+      },
+    });
+    const artist = await prisma.artist.create({
+      data: { slug: `${syntheticPrefix}-artist`, name: "Synthetic Artist", role: "Tattoo Artist" },
+    });
+    const artwork = await prisma.archiveArtwork.create({
+      data: {
+        title: "Synthetic Archive Fixture",
+        slug: `${syntheticPrefix}-artwork`,
+        altText: "Synthetic fixture",
+        storageKey: `archive/${syntheticPrefix}/${randomUUID()}.png`,
+        contentType: "image/png",
+      },
+    });
+
+    await authenticateTestAdmin();
+    const deleteResponse = await deleteBooking(
+      deleteRequest(`http://localhost/api/admin/bookings/${target.id}`, {}, { storageKey: "attacker/arbitrary.png" }),
+      { params: { id: target.id } },
+    );
+    expect(deleteResponse.status).toBe(200);
+    expect(await deleteResponse.json()).toEqual({ success: true, cleanupPending: false });
+    expect(deleteObject.mock.calls.map(([key]) => key).sort()).toEqual([targetStorageKey]);
+    expect(await prisma.bookingRequest.findUnique({ where: { id: target.id } })).toBeNull();
+    expect(await prisma.bookingReferenceImage.count({ where: { bookingRequestId: target.id } })).toBe(0);
+    expect(await prisma.bookingNote.count({ where: { bookingRequestId: target.id } })).toBe(0);
+    expect(await prisma.appointment.count({ where: { bookingRequestId: target.id } })).toBe(0);
+    expect(await prisma.tattooConsentRecord.count({ where: { bookingRequestId: target.id } })).toBe(0);
+    expect(await prisma.clientAccessToken.count({ where: { bookingRequestId: target.id } })).toBe(0);
+    expect(await prisma.clientSession.count({ where: { bookingRequestId: target.id } })).toBe(0);
+    expect(await prisma.paymentPlan.count({ where: { bookingRequestId: target.id } })).toBe(0);
+    expect(await prisma.paymentInstallment.count({ where: { paymentPlanId: targetPlan.id } })).toBe(0);
+    expect(await prisma.payment.count({ where: { paymentPlanId: targetPlan.id } })).toBe(0);
+    expect(await prisma.auditLog.count({ where: { entityId: target.id, action: "BOOKING_STATUS_UPDATED" } })).toBe(0);
+    expect(await prisma.auditLog.count({ where: { entityId: targetReference, action: "BOOKING_CREATED" } })).toBe(0);
+    expect(await prisma.auditLog.count({ where: { entityId: targetReference, action: "BOOKING_DELETED", userId: adminId } })).toBe(1);
+
+    expect(await prisma.bookingRequest.findUnique({ where: { id: other.id } })).not.toBeNull();
+    expect(await prisma.bookingReferenceImage.findUnique({ where: { storageKey: otherStorageKey } })).not.toBeNull();
+    expect(await prisma.paymentPlan.findUnique({ where: { id: otherPlan.id } })).not.toBeNull();
+    expect(await prisma.paymentInstallment.findUnique({ where: { id: otherInstallment.id } })).not.toBeNull();
+    expect(await prisma.payment.findUnique({ where: { receiptNumber: `${syntheticPrefix}-other-receipt` } })).not.toBeNull();
+    expect(await prisma.artist.findUnique({ where: { id: artist.id } })).not.toBeNull();
+    expect(await prisma.archiveArtwork.findUnique({ where: { id: artwork.id } })).not.toBeNull();
+    expect(await prisma.user.findUnique({ where: { id: adminId } })).not.toBeNull();
+
+    const repeatedDelete = await deleteBooking(
+      deleteRequest(`http://localhost/api/admin/bookings/${target.id}`),
+      { params: { id: target.id } },
+    );
+    expect(repeatedDelete.status).toBe(404);
+    expect(deleteObject).toHaveBeenCalledTimes(1);
+
+    await prisma.auditLog.deleteMany({ where: { entityType: "BookingRequest", entityId: targetReference } });
+    await prisma.artist.delete({ where: { id: artist.id } });
+    await prisma.archiveArtwork.delete({ where: { id: artwork.id } });
+  });
+
+  it("reports private image cleanup failures without exposing provider errors", async () => {
+    const email = `${syntheticPrefix}-delete-storage-failure@example.test`;
+    const created = await submitBooking(email, `${syntheticPrefix}-delete-storage-failure`);
+    const { referenceNumber } = await created.json();
+    syntheticAuditReferences.push(referenceNumber);
+    const booking = await prisma.bookingRequest.findUniqueOrThrow({ where: { referenceNumber } });
+    const storageKey = `booking-reference-images/${booking.id}/${randomUUID()}.png`;
+    await prisma.bookingReferenceImage.create({
+      data: {
+        bookingRequestId: booking.id,
+        storageKey,
+        originalFilename: "synthetic.png",
+        mimeType: "image/png",
+        fileSize: 8,
+      },
+    });
+    await authenticateTestAdmin();
+    deleteObject.mockRejectedValueOnce(new Error("synthetic provider secret"));
+
+    const response = await deleteBooking(
+      deleteRequest(`http://localhost/api/admin/bookings/${booking.id}`),
+      { params: { id: booking.id } },
+    );
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload).toEqual({ success: true, cleanupPending: true });
+    expect(JSON.stringify(payload)).not.toContain("synthetic provider secret");
+    expect(await prisma.bookingRequest.findUnique({ where: { id: booking.id } })).toBeNull();
+  });
+
+  it("returns not found for a concurrent second delete", async () => {
+    const email = `${syntheticPrefix}-delete-race@example.test`;
+    const created = await submitBooking(email, `${syntheticPrefix}-delete-race`);
+    const { referenceNumber } = await created.json();
+    syntheticAuditReferences.push(referenceNumber);
+    const booking = await prisma.bookingRequest.findUniqueOrThrow({ where: { referenceNumber } });
+    await authenticateTestAdmin();
+
+    const responses = await Promise.all([
+      deleteBooking(deleteRequest(`http://localhost/api/admin/bookings/${booking.id}`), { params: { id: booking.id } }),
+      deleteBooking(deleteRequest(`http://localhost/api/admin/bookings/${booking.id}`), { params: { id: booking.id } }),
+    ]);
+    expect(responses.map(({ status }) => status).sort()).toEqual([200, 404]);
+    expect(await prisma.bookingRequest.findUnique({ where: { id: booking.id } })).toBeNull();
   });
 
   it("returns the same generic login failure for wrong password and unknown email", async () => {

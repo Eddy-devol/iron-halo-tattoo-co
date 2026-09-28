@@ -3,10 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentAdmin } from "@/lib/server/auth";
-import { createSignedReadUrl } from "@/lib/server/storage/s3";
+import { authorizeAdminMutation } from "@/lib/server/admin-mutation";
+import { createSignedReadUrl, deletePrivateObject } from "@/lib/server/storage/s3";
 import { sendBookingStatusNotification } from "@/lib/server/email/resend";
-import { enforceRateLimit, rejectedOriginResponse, requestBodyTooLarge, requestIpKey, validateMutationOrigin } from "@/lib/server/security";
 import { safeErrorCategory } from "@/lib/server/safe-error-category";
+import { enforceRateLimit, rejectedOriginResponse, requestBodyTooLarge, requestIpKey, validateMutationOrigin } from "@/lib/server/security";
 
 const idSchema = z.string().uuid();
 const statusSchema = z.object({ status: z.nativeEnum(BookingStatus) }).strict();
@@ -263,5 +264,82 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       bookingId: params.id,
     });
     return NextResponse.json({ error: "Unable to update booking status." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  const authorization = await authorizeAdminMutation(request);
+  if ("response" in authorization) return authorization.response;
+  if (!idSchema.safeParse(params.id).success) {
+    return NextResponse.json({ error: "Invalid booking ID." }, { status: 400 });
+  }
+
+  try {
+    const result = await prisma.$transaction(async (transaction) => {
+      const booking = await transaction.bookingRequest.findUnique({
+        where: { id: params.id },
+        select: {
+          id: true,
+          referenceNumber: true,
+          referenceImages: { select: { storageKey: true } },
+        },
+      });
+      if (!booking) return { kind: "not_found" as const };
+
+      const deleted = await transaction.bookingRequest.deleteMany({ where: { id: booking.id } });
+      if (deleted.count !== 1) return { kind: "not_found" as const };
+
+      await transaction.auditLog.deleteMany({
+        where: {
+          entityType: "BookingRequest",
+          OR: [
+            { entityId: booking.id },
+            { entityId: booking.referenceNumber },
+          ],
+        },
+      });
+      await transaction.auditLog.create({
+        data: {
+          userId: authorization.admin.id,
+          action: "BOOKING_DELETED",
+          entityType: "BookingRequest",
+          entityId: booking.referenceNumber,
+          metadata: {
+            referenceNumber: booking.referenceNumber,
+            referenceImageCount: booking.referenceImages.length,
+          },
+        },
+      });
+
+      return {
+        kind: "deleted" as const,
+        referenceNumber: booking.referenceNumber,
+        storageKeys: booking.referenceImages.map(({ storageKey }) => storageKey),
+      };
+    });
+
+    if (result.kind === "not_found") {
+      return NextResponse.json({ error: "Booking not found." }, { status: 404 });
+    }
+
+    const cleanupResults = await Promise.allSettled(
+      result.storageKeys.map((storageKey) => deletePrivateObject(storageKey)),
+    );
+    const failedCleanups = cleanupResults.filter((cleanup) => cleanup.status === "rejected");
+    if (failedCleanups.length > 0) {
+      console.error("ADMIN_BOOKING_IMAGE_DELETE_FAILED", {
+        errorCategory: safeErrorCategory(failedCleanups[0].reason),
+        bookingReference: result.referenceNumber,
+        failedCount: failedCleanups.length,
+      });
+    }
+
+    return NextResponse.json({ success: true, cleanupPending: failedCleanups.length > 0 });
+  } catch (error) {
+    console.error("ADMIN_BOOKING_DELETE_FAILED", {
+      errorCategory: safeErrorCategory(error),
+      bookingId: params.id,
+    });
+    return NextResponse.json({ error: "Unable to delete booking." }, { status: 500 });
   }
 }

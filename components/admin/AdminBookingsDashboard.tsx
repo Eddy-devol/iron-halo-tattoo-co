@@ -49,6 +49,7 @@ export default function AdminBookingsDashboard() {
   const [result, setResult] = useState<BookingListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deletionNotice, setDeletionNotice] = useState("");
 
   const loadBookings = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
@@ -75,6 +76,16 @@ export default function AdminBookingsDashboard() {
     return () => controller.abort();
   }, [loadBookings]);
 
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("deleted") !== "1") return;
+    setDeletionNotice(
+      query.get("cleanupPending") === "1"
+        ? "The booking was deleted, but one or more private reference images could not be removed."
+        : "The booking request was permanently deleted.",
+    );
+  }, []);
+
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPage(1);
@@ -93,6 +104,11 @@ export default function AdminBookingsDashboard() {
           </div>
           {result && <p className="text-xs uppercase tracking-[.16em] text-ink/50">{result.pagination.total} total</p>}
         </div>
+        {deletionNotice && (
+          <p className="mt-6 border-l border-rust bg-white/35 py-3 pl-4 text-sm text-ink/75" role="status">
+            {deletionNotice}
+          </p>
+        )}
 
         <form onSubmit={submitSearch} className="mt-9 grid gap-3 sm:grid-cols-[1fr_220px_auto]">
           <label className="sr-only" htmlFor="booking-search">Search reference, name, email, or phone</label>
