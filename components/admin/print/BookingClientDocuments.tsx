@@ -115,9 +115,9 @@ export function TattooConsentDocument({ booking }: { booking: BookingDocumentDat
     <section className="document-page">
       <DocumentHeader title="Tattoo Procedure Consent" booking={booking} />
       <p className="document-notice">
-        Studio document for review; this is not represented as an official Texas DSHS form.
+        This is a studio document, not an official Texas DSHS form.
       </p>
-      {!configuredConsent && <p className="document-notice"><strong>Draft only:</strong> final wording requires studio and qualified counsel approval before client use.</p>}
+      {!configuredConsent && <p className="document-notice"><strong>Not ready to sign.</strong> The studio and qualified counsel must review the consent wording before use. That review should cover the procedure, potential risks, aftercare, permanence, and client responsibility.</p>}
       <section className="document-section">
         <h2>Client information</h2>
         <dl className="document-grid">
@@ -155,7 +155,7 @@ export function TattooConsentDocument({ booking }: { booking: BookingDocumentDat
           <div className="document-copy">{approvedText.split(/\r?\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div>
         ) : (
           <p className="document-notice">
-            Consent wording is not configured. The studio must supply and review final consent text with qualified counsel before this form is used for client signature. Topics for review include procedure, potential risks, aftercare, permanence, and client responsibility.
+            Consent details are not available yet. The studio and qualified counsel must review the wording before this document is signed, including the procedure, potential risks, aftercare, permanence, and client responsibility.
           </p>
         )}
       </section>
@@ -227,12 +227,12 @@ export function PaymentPlanDocument({ booking }: { booking: BookingDocumentData 
       </section>
       <section className="document-section">
         <h2>Agreement</h2>
-        {!configuredAgreement && <p className="document-notice"><strong>Draft only:</strong> final payment terms require studio review before client use.</p>}
+        {!configuredAgreement && <p className="document-notice"><strong>Not ready to sign.</strong> The studio must review the payment terms before this agreement is used.</p>}
         {agreement ? (
           <div className="document-copy">{agreement.split(/\r?\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div>
         ) : (
           <p className="document-notice">
-            Studio payment-plan wording is not configured. The studio must review and supply its final policy language before using this agreement for signature.
+            Payment terms for this plan have not been supplied. The studio must review and complete this agreement before it is signed.
           </p>
         )}
         <div className="signature-grid">
@@ -258,7 +258,7 @@ export function PaymentReceiptDocument({
   return (
     <section className="document-page">
       <DocumentHeader title="Payment Receipt" booking={booking} />
-      <p className="document-notice">Manually recorded payment; no payment processor was used.</p>
+      <p className="document-notice">This receipt records a payment received by the studio.</p>
       <section className="document-section">
         <h2>Receipt details</h2>
         <dl className="document-grid">

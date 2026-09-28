@@ -22,7 +22,7 @@ export default function BookPage() {
         <div className="lg:sticky lg:top-12 lg:self-start">
           <p className="eyebrow">Start here</p>
           <h1 className="mt-5 font-display text-6xl leading-[.9] sm:text-7xl">Make an<br /><em className="text-rust">enquiry.</em></h1>
-          <p className="mt-7 max-w-sm text-sm leading-7 text-bone/65">Share a little about your idea. This form is a request, not a confirmed appointment. We’ll reply with next steps.</p>
+          <p className="mt-7 max-w-sm text-sm leading-7 text-bone/65">Tell us a little about your idea. Sending a request doesn’t book an appointment; we’ll follow up about next steps.</p>
         </div>
         <BookingForm contact={contact} />
       </div>

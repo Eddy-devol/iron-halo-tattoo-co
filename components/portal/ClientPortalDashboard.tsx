@@ -36,9 +36,9 @@ export default function ClientPortalDashboard({ booking }: { booking: ClientPort
         window.location.assign("/portal/login");
         return;
       }
-      setLogoutError("Unable to sign out. Please try again.");
+      setLogoutError("We couldn’t sign you out just now. Please try again.");
     } catch {
-      setLogoutError("Unable to sign out. Please try again.");
+      setLogoutError("We couldn’t sign you out just now. Please try again.");
     } finally {
       setSigningOut(false);
     }
@@ -79,7 +79,7 @@ export default function ClientPortalDashboard({ booking }: { booking: ClientPort
                 <h2 className="font-display text-3xl">{dateTime(appointment.startAt)}</h2>
                 <p className="mt-3 text-sm text-bone/60">Until {dateTime(appointment.endAt)}</p>
               </div>
-            ) : <p className="mt-6 text-sm leading-7 text-bone/60">Appointment not yet scheduled.</p>}
+            ) : <p className="mt-6 text-sm leading-7 text-bone/60">No appointment has been scheduled yet.</p>}
           </section>
 
           <section className="surface-card min-w-0 p-5 sm:p-8">
@@ -117,8 +117,8 @@ export default function ClientPortalDashboard({ booking }: { booking: ClientPort
                   )}
                 </div>
               </>
-            ) : <p className="mt-6 text-sm leading-7 text-bone/60">A payment plan has not been recorded for this booking.</p>}
-            <p className="mt-5 text-xs leading-6 text-bone/40">Payment information is read-only here. Contact the studio with any questions.</p>
+            ) : <p className="mt-6 text-sm leading-7 text-bone/60">No payment plan is listed for this booking.</p>}
+            <p className="mt-5 text-xs leading-6 text-bone/40">For questions about a payment, please contact the studio.</p>
           </section>
 
           <section className="surface-card min-w-0 p-5 sm:p-8">
@@ -126,7 +126,7 @@ export default function ClientPortalDashboard({ booking }: { booking: ClientPort
             <div className="mt-4"><StatusBadge status={booking.consent?.status ?? "NOT_COMPLETED"} tone="dark" /></div>
             {booking.consent?.status === "COMPLETED"
               ? <p className="mt-4 text-sm leading-7 text-bone/60">Consent completed{booking.consent.completedAt ? ` on ${date(booking.consent.completedAt)}` : ""}.</p>
-              : <p className="mt-4 text-sm leading-7 text-bone/60">Consent has not yet been completed. Please follow the studio’s instructions before your appointment. Physical completion is recorded by the studio.</p>}
+              : <p className="mt-4 text-sm leading-7 text-bone/60">Consent hasn’t been completed yet. The studio records it when completed in person. Please follow the studio’s instructions before your appointment.</p>}
             {booking.consent && <a className="nav-link mt-4 inline-flex min-h-11 items-center text-xs uppercase tracking-[.14em] text-bone/80" href="/portal/documents/consent">View consent document <span className="link-arrow ml-2" aria-hidden="true">↗</span></a>}
           </section>
         </div>

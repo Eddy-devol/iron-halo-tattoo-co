@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import ArchiveArtworkImage from "@/components/ArchiveArtworkImage";
 import { listPublishedArchiveArtworks } from "@/lib/server/archive-public";
 import { safeErrorCategory } from "@/lib/server/safe-error-category";
 import { resolveStudioContactDetails } from "@/lib/studio-contact";
@@ -18,7 +18,7 @@ export default async function Home() {
   }
 
   const selectedWork = work.slice(0, 3);
-  const heroArtwork = work[0];
+  const heroArtwork = work.find((item) => item.featured) ?? work[0];
   const contact = resolveStudioContactDetails({
     email: process.env.STUDIO_CONTACT_EMAIL,
     phone: process.env.STUDIO_CONTACT_PHONE,
@@ -28,20 +28,19 @@ export default async function Home() {
   return (
     <main>
       <section className="home-hero relative isolate flex min-h-[100svh] overflow-hidden bg-ink">
-        <div className={`home-hero-media absolute inset-0 z-0 ${heroArtwork ? "" : "home-hero-media-fallback"}`}>
-          {heroArtwork && (
-            <Image
-              src={`/api/archive/${encodeURIComponent(heroArtwork.slug)}/image`}
-              alt=""
-              aria-hidden="true"
-              fill
-              priority
-              sizes="100vw"
-              unoptimized
-              className="home-hero-image object-cover"
-            />
-          )}
-        </div>
+        {heroArtwork ? (
+          <ArchiveArtworkImage
+            src={`/api/archive/${encodeURIComponent(heroArtwork.slug)}/image`}
+            alt={heroArtwork.altText}
+            decorative
+            priority
+            sizes="100vw"
+            className="home-hero-media absolute inset-0 z-0"
+            imageClassName="home-hero-image object-cover"
+          />
+        ) : (
+          <div className="home-hero-media home-hero-media-fallback absolute inset-0 z-0" aria-hidden="true" />
+        )}
         <div aria-hidden="true" className="home-hero-shade absolute inset-0 z-[1]" />
 
         <header className="absolute inset-x-0 top-0 z-20 border-b border-white/15">
@@ -118,45 +117,59 @@ export default async function Home() {
           </div>
 
           {selectedWork.length > 0 ? (
-            <div className="mt-8 grid gap-x-8 gap-y-12 md:grid-cols-12 md:items-start md:gap-y-16 lg:mt-12">
-              {selectedWork.map((item, index) => (
-                <article
-                  key={item.slug}
-                  className={`group min-w-0 ${index === 0 ? "md:col-span-7" : "md:col-span-5"} ${index === 1 ? "md:mt-20" : ""}`}
-                >
-                  <div className={`image-frame ${index === 0 ? "aspect-[4/5] md:aspect-[5/4]" : "aspect-[4/5]"}`}>
-                    <Image
-                      src={`/api/archive/${encodeURIComponent(item.slug)}/image`}
-                      alt={item.altText}
-                      fill
-                      sizes={index === 0 ? "(max-width: 768px) 100vw, 58vw" : "(max-width: 768px) 100vw, 42vw"}
-                      unoptimized
-                      className="artwork-image object-cover group-hover:scale-[1.025]"
-                    />
+            <>
+              {heroArtwork && (
+                <article className="group mt-8 grid min-w-0 gap-5 md:mt-12 md:grid-cols-[minmax(0,1.6fr)_minmax(15rem,.7fr)] md:items-end md:gap-10">
+                  <ArchiveArtworkImage
+                    src={`/api/archive/${encodeURIComponent(heroArtwork.slug)}/image`}
+                    alt={heroArtwork.altText}
+                    sizes="(max-width: 768px) 100vw, 65vw"
+                    className="image-frame aspect-[4/5] md:aspect-[5/4]"
+                    imageClassName="artwork-image object-cover group-hover:scale-[1.025]"
+                  />
+                  <div className="pb-1 md:pb-4">
+                    <p className="text-[10px] uppercase tracking-[.22em] text-bone/45">{heroArtwork.featured ? "Featured work" : "Selected work"}</p>
+                    {heroArtwork.style && <p className="eyebrow mt-5 !text-[9px]">{heroArtwork.style}</p>}
+                    <h3 className="mt-2 font-display text-4xl leading-[.95] sm:text-5xl lg:text-6xl">{heroArtwork.title}</h3>
+                    {heroArtwork.description && <p className="mt-5 max-w-md text-sm leading-7 text-bone/60">{heroArtwork.description}</p>}
+                    <span aria-hidden="true" className="mt-7 block h-px w-16 bg-rust/70" />
                   </div>
-                  <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 border-b border-white/15 pb-4">
-                    <div>
-                      {item.style && <p className="eyebrow !text-[9px]">{item.style}</p>}
-                      <h3 className="mt-1 font-display text-3xl sm:text-4xl">{item.title}</h3>
-                    </div>
-                    <span className="text-[10px] uppercase tracking-[.18em] text-bone/45">0{index + 1}</span>
-                  </div>
-                  {item.description && <p className="mt-3 max-w-lg text-sm leading-6 text-bone/55">{item.description}</p>}
                 </article>
-              ))}
-            </div>
+              )}
+
+              {selectedWork.length > 1 && (
+                <div className="mt-12 grid gap-x-8 gap-y-10 border-t border-white/10 pt-8 sm:grid-cols-2 md:mt-16 md:grid-cols-12 md:items-start md:gap-y-16 md:pt-10">
+                  {selectedWork.slice(1).map((item, index) => (
+                    <article key={item.slug} className={`group min-w-0 ${index === 0 ? "md:col-span-5" : "md:col-span-7 md:mt-20"}`}>
+                      <ArchiveArtworkImage
+                        src={`/api/archive/${encodeURIComponent(item.slug)}/image`}
+                        alt={item.altText}
+                        sizes={index === 0 ? "(max-width: 768px) 100vw, 42vw" : "(max-width: 768px) 100vw, 58vw"}
+                        className={`image-frame ${index === 0 ? "aspect-[4/5]" : "aspect-[4/5] md:aspect-[5/4]"}`}
+                        imageClassName="artwork-image object-cover group-hover:scale-[1.025]"
+                      />
+                      <div className="mt-4 border-b border-white/15 pb-4">
+                        {item.style && <p className="eyebrow !text-[9px]">{item.style}</p>}
+                        <h3 className="mt-1 font-display text-3xl sm:text-4xl">{item.title}</h3>
+                        {item.description && <p className="mt-3 max-w-lg text-sm leading-6 text-bone/55">{item.description}</p>}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </>
           ) : (
             <p className="mt-8 max-w-lg border-l border-rust/70 py-2 pl-5 text-sm leading-7 text-bone/60">
               {archiveUnavailable
-                ? "The studio archive is temporarily unavailable. Please check back soon."
-                : "Selected work will appear here as it is added to the studio archive."}
+                ? "We can’t show the studio work right now. Please try again later."
+                : "There’s no selected work to share just yet."}
             </p>
           )}
 
           <div className="mt-10 border-t border-white/15 pt-6 sm:mt-14 sm:flex sm:items-center sm:justify-between">
             <p className="text-xs uppercase tracking-[.16em] text-bone/45">Iron Halo / Studio archive</p>
             <a href="#work" className="nav-link mt-4 inline-flex min-h-11 items-center gap-2 text-xs uppercase tracking-[.16em] text-bone sm:mt-0">
-              View the work <span className="link-arrow" aria-hidden="true">↗</span>
+              View all work <span className="link-arrow" aria-hidden="true">↗</span>
             </a>
           </div>
         </div>

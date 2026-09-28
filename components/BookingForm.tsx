@@ -39,14 +39,14 @@ export default function BookingForm({ contact }: { contact: StudioContactDetails
         <p className="eyebrow">REQUEST RECEIVED</p>
         <h2 className="mt-5 font-display text-5xl">Thank you.</h2>
         <p className="mt-5 text-sm leading-7 text-bone/65">
-          Your booking request has been received. We will review your request before an appointment is confirmed. This request is not an instantly confirmed appointment.
+          Thanks. We’ll review the details before confirming an appointment.
         </p>
         <p className="mt-8 border-t border-white/10 pt-5 text-xs uppercase tracking-[.18em] text-bone/60">
           Reference <strong className="ml-2 text-bone">{reference}</strong>
         </p>
         {(contact.email || contact.phone || contact.facebook) && (
           <div className="mt-8 border-t border-white/10 pt-5">
-            <p className="text-sm leading-6 text-bone/65">If you would like to discuss your idea directly, you can also contact the studio:</p>
+            <p className="text-sm leading-6 text-bone/65">Want to talk through your idea? You can also reach the studio here:</p>
             <div className="mt-4 flex flex-wrap gap-x-5 gap-y-3 text-xs uppercase tracking-[.16em]">
               {contact.email && <a className="text-bone/70 underline decoration-rust/60 underline-offset-4 hover:text-bone" href={contact.email.href}>Email</a>}
               {contact.phone && <a className="text-bone/70 underline decoration-rust/60 underline-offset-4 hover:text-bone" href={contact.phone.href}>Phone</a>}
@@ -111,7 +111,7 @@ export default function BookingForm({ contact }: { contact: StudioContactDetails
         <button type="submit" disabled={state === "sending"} className="button-primary w-full disabled:cursor-wait disabled:opacity-50 sm:w-auto">
           {state === "sending" ? "Sending…" : <>Send request <span className="link-arrow" aria-hidden="true">↗</span></>}
         </button>
-        {state === "error" && <p className="text-xs text-rust" role="alert">Please check your details and try again.</p>}
+        {state === "error" && <p className="text-xs text-rust" role="alert">We couldn’t send your request just now. Please try again.</p>}
       </div>
     </form>
   );

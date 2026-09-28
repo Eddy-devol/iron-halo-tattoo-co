@@ -33,11 +33,11 @@ export default function ClientPortalLogin() {
         }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Unable to request a sign-in link.");
+      if (!response.ok) throw new Error("We couldn’t send a sign-in link just now. Please try again.");
       setMessage(payload.message);
       formElement.reset();
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to request a sign-in link.");
+    } catch {
+      setError("We couldn’t send a sign-in link just now. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -54,10 +54,10 @@ export default function ClientPortalLogin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
       });
-      if (!response.ok) throw new Error("This sign-in link is invalid or has expired. Request a new link.");
+      if (!response.ok) throw new Error("We couldn’t sign you in with this link. Please try again or request a new one.");
       window.location.assign("/portal");
     } catch (verifyError) {
-      setError(verifyError instanceof Error ? verifyError.message : "Unable to sign in with that link.");
+      setError(verifyError instanceof Error ? verifyError.message : "We couldn’t sign you in just now. Please try again.");
       setBusy(false);
     }
   }

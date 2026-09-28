@@ -56,7 +56,7 @@ function Consent({ booking }: { booking: ClientPortalBooking }) {
       <p className="document-notice">
         {consent.status === "COMPLETED"
           ? "Consent completed."
-          : "Consent has not yet been completed. Please follow the studio’s instructions before your appointment. Physical completion is recorded by the studio."}
+          : "Consent hasn’t been completed yet. The studio records it in person. Please follow the studio’s instructions before your appointment."}
         {" "}Viewing or printing this document does not complete consent.
       </p>
       <section className="document-section"><h2>Client information</h2><dl className="document-grid">
@@ -75,7 +75,7 @@ function Consent({ booking }: { booking: ClientPortalBooking }) {
       <section className="document-section"><h2>Consent information</h2>
         {consent.consentText
           ? <div className="document-copy">{consent.consentText.split(/\r?\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div>
-          : <p className="document-notice">Client-ready consent wording has not been provided yet. Please follow the studio’s instructions before your appointment.</p>}
+          : <p className="document-notice">Consent details are not available here yet. Please follow the studio’s instructions before your appointment.</p>}
       </section>
     </section>
   );
@@ -113,7 +113,7 @@ function Receipt({ booking, receiptNumber }: { booking: ClientPortalBooking; rec
   return (
     <section className="document-page">
       <Header title="Payment Receipt" booking={booking} />
-      <p className="document-notice">Manually recorded payment; no payment processor was used.</p>
+      <p className="document-notice">This receipt records a payment received by the studio.</p>
       <section className="document-section"><h2>Receipt details</h2><dl className="document-grid">
         <Field label="Receipt number" value={payment.receiptNumber} />
         <Field label="Client" value={booking.fullName} />
