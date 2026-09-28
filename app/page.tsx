@@ -1,13 +1,26 @@
 import Link from "next/link";
+import { prisma } from "@/lib/db/prisma";
 import ArchiveArtworkImage from "@/components/ArchiveArtworkImage";
+import ArtistPortrait from "@/components/ArtistPortrait";
 import { listPublishedArchiveArtworks } from "@/lib/server/archive-public";
 import { safeErrorCategory } from "@/lib/server/safe-error-category";
 import { resolveStudioContactDetails } from "@/lib/studio-contact";
 
 export const dynamic = "force-dynamic";
 
+type PublicArtist = {
+  slug: string;
+  name: string;
+  role: string;
+  bio: string | null;
+  specialties: string[];
+  instagramUrl: string | null;
+  imageUrl: string | null;
+};
+
 export default async function Home() {
   let work: Awaited<ReturnType<typeof listPublishedArchiveArtworks>> = [];
+  let artists: PublicArtist[] = [];
   let archiveUnavailable = false;
 
   try {
@@ -15,6 +28,28 @@ export default async function Home() {
   } catch (error) {
     archiveUnavailable = true;
     console.error("PUBLIC_ARCHIVE_RENDER_FAILED", { errorCategory: safeErrorCategory(error) });
+  }
+
+  try {
+    const profiles = await prisma.artist.findMany({
+      where: { published: true },
+      orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+      select: {
+        slug: true,
+        name: true,
+        role: true,
+        bio: true,
+        specialties: true,
+        instagramUrl: true,
+        imageKey: true,
+      },
+    });
+    artists = profiles.map(({ imageKey, ...artist }) => ({
+      ...artist,
+      imageUrl: imageKey ? `/api/artists/${encodeURIComponent(artist.slug)}/image` : null,
+    }));
+  } catch (error) {
+    console.error("PUBLIC_ARTIST_RENDER_FAILED", { errorCategory: safeErrorCategory(error) });
   }
 
   const selectedWork = work.slice(0, 3);
@@ -54,6 +89,7 @@ export default async function Home() {
             </Link>
             <div className="order-3 flex w-full items-center justify-between gap-4 border-t border-white/10 pt-3 text-[9px] uppercase tracking-[.16em] text-bone/70 md:order-none md:w-auto md:justify-start md:gap-8 md:border-0 md:pt-0 md:text-[10px] md:tracking-[.2em]">
               <a href="#work" className="nav-link">The work</a>
+              {artists.length > 0 && <a href="#artists" className="nav-link">The artists</a>}
               <a href="#studio" className="nav-link">The studio</a>
               <a href="#process" className="nav-link">The process</a>
             </div>
@@ -106,11 +142,57 @@ export default async function Home() {
         </div>
       </section>
 
+      {artists.length > 0 && (
+        <section id="artists" className="section-space scroll-mt-8 border-b border-white/10 bg-graphite/35 px-5 sm:px-8 lg:px-10">
+          <div className="mx-auto max-w-7xl">
+            <div className="flex flex-col gap-5 border-b border-white/15 pb-7 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="eyebrow">02 — The artists</p>
+                <h2 className="mt-4 font-display text-5xl leading-none sm:text-7xl">The hands behind the work</h2>
+              </div>
+              <p className="max-w-xs text-xs leading-5 text-bone/50 sm:text-right">Meet the artists at Iron Halo.</p>
+            </div>
+            <div className="mt-8 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:mt-12 lg:grid-cols-3 lg:gap-x-8">
+              {artists.map((artist) => (
+                <article key={artist.slug} className="min-w-0">
+                  <ArtistPortrait
+                    src={artist.imageUrl}
+                    alt={artist.imageUrl ? `Portrait of ${artist.name}` : ""}
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    className="image-frame aspect-[4/5]"
+                  />
+                  <div className="border-b border-white/15 py-5">
+                    <p className="eyebrow !text-[9px]">{artist.role}</p>
+                    <h3 className="mt-2 font-display text-3xl sm:text-4xl">{artist.name}</h3>
+                    {artist.bio && <p className="mt-4 max-w-lg text-sm leading-6 text-bone/60">{artist.bio}</p>}
+                    {artist.specialties.length > 0 && (
+                      <p className="mt-4 text-[10px] uppercase tracking-[.12em] text-bone/45">
+                        {artist.specialties.join(" · ")}
+                      </p>
+                    )}
+                    {artist.instagramUrl && (
+                      <a
+                        href={artist.instagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="nav-link mt-4 inline-flex min-h-11 items-center text-[10px] uppercase tracking-[.14em] text-bone/75"
+                      >
+                        Instagram <span className="ml-2" aria-hidden="true">↗</span>
+                      </a>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       <section id="work" className="section-space scroll-mt-8 border-b border-white/10 bg-graphite/60 px-5 sm:px-8 lg:px-10">
         <div className="mx-auto max-w-7xl">
           <div className="flex flex-col gap-5 border-b border-white/15 pb-7 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="eyebrow">02 — Completed tattoo work</p>
+              <p className="eyebrow">{artists.length > 0 ? "03" : "02"} — Completed tattoo work</p>
               <h2 className="mt-4 font-display text-5xl leading-none sm:text-7xl">Selected work</h2>
             </div>
             <p className="max-w-xs text-xs leading-5 text-bone/50 sm:text-right">A selection from the Iron Halo studio archive.</p>
@@ -178,7 +260,7 @@ export default async function Home() {
       <section id="process" className="section-space scroll-mt-8 px-5 sm:px-8 lg:px-10">
         <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[.8fr_1.2fr] lg:gap-20">
           <div>
-            <p className="eyebrow">03 — The process</p>
+            <p className="eyebrow">{artists.length > 0 ? "04" : "03"} — The process</p>
             <h2 className="mt-5 max-w-lg font-display text-5xl leading-[.92] sm:text-7xl">
               An idea,<br />made <em className="font-normal text-rust">intentional.</em>
             </h2>
@@ -226,6 +308,7 @@ export default async function Home() {
             </div>
             <nav className="grid grid-cols-2 gap-x-8 gap-y-3 text-[10px] uppercase tracking-[.15em] text-bone/65 sm:grid-cols-3 sm:gap-x-10" aria-label="Footer navigation">
               <a className="nav-link" href="#work">The work</a>
+              {artists.length > 0 && <a className="nav-link" href="#artists">The artists</a>}
               <a className="nav-link" href="#studio">The studio</a>
               <Link className="nav-link" href="/book">Booking</Link>
               <Link className="nav-link" href="/privacy">Privacy</Link>

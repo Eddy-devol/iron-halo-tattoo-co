@@ -29,16 +29,23 @@ export default function AdminHeader() {
           <Link
             href="/admin"
             aria-current={pathname === "/admin" || pathname.startsWith("/admin/bookings") ? "page" : undefined}
-            className={`nav-link text-[10px] uppercase tracking-[.14em] ${pathname === "/admin" || pathname.startsWith("/admin/bookings") ? "border-current text-ink" : "text-ink/60"}`}
+            className={`nav-link inline-flex min-h-11 items-center text-[10px] uppercase tracking-[.14em] ${pathname === "/admin" || pathname.startsWith("/admin/bookings") ? "border-current text-ink" : "text-ink/60"}`}
           >
             Bookings
           </Link>
           <Link
             href="/admin/archive"
             aria-current={pathname.startsWith("/admin/archive") ? "page" : undefined}
-            className={`nav-link text-[10px] uppercase tracking-[.14em] ${pathname.startsWith("/admin/archive") ? "border-current text-ink" : "text-ink/60"}`}
+            className={`nav-link inline-flex min-h-11 items-center text-[10px] uppercase tracking-[.14em] ${pathname.startsWith("/admin/archive") ? "border-current text-ink" : "text-ink/60"}`}
           >
             Archive
+          </Link>
+          <Link
+            href="/admin/artists"
+            aria-current={pathname.startsWith("/admin/artists") ? "page" : undefined}
+            className={`nav-link inline-flex min-h-11 items-center text-[10px] uppercase tracking-[.14em] ${pathname.startsWith("/admin/artists") ? "border-current text-ink" : "text-ink/60"}`}
+          >
+            Artists
           </Link>
         </nav>
         <div className="ml-auto flex items-center gap-3 sm:gap-5">

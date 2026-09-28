@@ -13,6 +13,7 @@ const requiredTables = [
   "AuditLog",
   "Appointment",
   "ArchiveArtwork",
+  "Artist",
   "PaymentPlan",
   "PaymentInstallment",
   "Payment",
@@ -138,6 +139,42 @@ async function main() {
     throw new Error(`ArchiveArtwork is missing expected columns: ${missingArchiveColumns.join(", ")}`);
   }
   console.info("ArchiveArtwork fields: verified");
+
+  const artistColumnRows = await prisma.$queryRaw`
+    SELECT column_name AS name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'Artist'
+  `;
+  const artistColumns = new Set(artistColumnRows.map(({ name }) => name));
+  const requiredArtistColumns = [
+    "slug",
+    "name",
+    "role",
+    "bio",
+    "specialties",
+    "instagramUrl",
+    "imageKey",
+    "imageContentType",
+    "displayOrder",
+    "published",
+    "createdAt",
+    "updatedAt",
+  ];
+  const missingArtistColumns = requiredArtistColumns.filter((column) => !artistColumns.has(column));
+  if (missingArtistColumns.length) {
+    throw new Error(`Artist is missing expected profile fields: ${missingArtistColumns.join(", ")}`);
+  }
+  console.info("Artist profile fields: verified");
+
+  const artistForeignKeys = await prisma.$queryRaw`
+    SELECT constraint_name
+    FROM information_schema.table_constraints
+    WHERE table_schema = 'public'
+      AND table_name = 'Artist'
+      AND constraint_type = 'FOREIGN KEY'
+  `;
+  if (artistForeignKeys.length) throw new Error("Artist profiles must not have foreign-key relationships.");
+  console.info("Artist profile foreign-key independence: verified");
 
   const enumRows = await prisma.$queryRaw`
     SELECT t.typname AS name, array_agg(e.enumlabel ORDER BY e.enumsortorder) AS labels

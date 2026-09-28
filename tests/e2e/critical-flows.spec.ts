@@ -214,6 +214,34 @@ test("public booking retry and authenticated admin workflow", async ({ page }) =
   await expect(noteParagraph).toBeVisible();
   expect(await prisma.bookingNote.count({ where: { bookingRequestId: storedBooking!.id, authorId: adminId } })).toBe(1);
 
+  const artistListResponsePromise = page.waitForResponse((response) =>
+    response.url().endsWith("/api/admin/artists") && response.request().method() === "GET",
+  );
+  await page.goto("/admin/artists");
+  const artistListResponse = await artistListResponsePromise;
+  expect(artistListResponse.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "Artists" })).toBeVisible();
+  await expect(page.getByText("Loading artist profiles\u2026")).toHaveCount(0);
+  for (const width of [375, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const addArtistLink = page.getByRole("link", { name: "Add artist" });
+  await addArtistLink.focus();
+  await Promise.all([
+    page.waitForURL("**/admin/artists/new"),
+    addArtistLink.press("Enter"),
+  ]);
+  await expect(page.getByRole("heading", { name: "Add artist" })).toBeVisible();
+  await expect(page.getByLabel("Name")).toBeVisible();
+  await expect(page.getByLabel("Portrait")).toHaveAttribute("required", "");
+  for (const width of [375, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+
   await page.getByRole("button", { name: "Sign out" }).click();
   await page.waitForURL("**/admin/login");
   await page.goto("/admin");

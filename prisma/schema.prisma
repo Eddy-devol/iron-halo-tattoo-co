@@ -220,6 +220,24 @@ model ArchiveArtwork {
   @@index([createdAt])
 }
 
+model Artist {
+  id               String   @id @default(uuid()) @db.Uuid
+  slug             String   @unique
+  name             String   @db.VarChar(120)
+  role             String   @db.VarChar(80)
+  bio              String?  @db.Text
+  specialties      String[] @default([])
+  instagramUrl     String?  @db.VarChar(2048)
+  imageKey         String?  @unique
+  imageContentType String?  @db.VarChar(32)
+  displayOrder     Int      @default(0)
+  published        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([published, displayOrder, createdAt])
+}
+
 model PaymentPlan {
   id               String               @id @default(uuid()) @db.Uuid
   bookingRequestId String               @unique @db.Uuid
