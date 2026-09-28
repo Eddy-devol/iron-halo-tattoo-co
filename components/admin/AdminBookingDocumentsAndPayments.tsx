@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { generatePaymentSchedule, scheduleTotalCents, type PaymentFrequency } from "@/lib/payment-schedule";
+import StatusBadge from "@/components/StatusBadge";
 
 type Installment = {
   id: string;
@@ -72,7 +73,7 @@ function shortDate(value: string | null) {
 
 function ActionButton({ children, disabled, type = "submit" }: { children: ReactNode; disabled?: boolean; type?: "submit" | "button" }) {
   return (
-    <button type={type} disabled={disabled} className="border border-ink bg-ink px-5 py-3 text-[10px] uppercase tracking-[.16em] text-white disabled:cursor-not-allowed disabled:opacity-45">
+    <button type={type} disabled={disabled} className="button-primary !min-h-11 !border-ink !bg-ink !px-5 !py-3 !text-[10px] !tracking-[.14em] !text-bone disabled:cursor-not-allowed disabled:opacity-45">
       {children}
     </button>
   );
@@ -265,7 +266,7 @@ export default function AdminBookingDocumentsAndPayments({
       <section>
         <h2 className="font-display text-3xl">Documents</h2>
         <p className="mt-2 text-xs text-ink/55">Documents are private to authenticated administrators. Printing does not change booking or consent status.</p>
-        <div className="mt-5 flex flex-wrap gap-3">
+        <div className="mt-5 flex flex-wrap gap-2 sm:gap-3">
           <Link className="button-quiet" target="_blank" rel="noreferrer" href={`/admin/bookings/${encodeURIComponent(bookingId)}/print/confirmation`}>Print booking confirmation</Link>
           <Link className="button-quiet" target="_blank" rel="noreferrer" href={`/admin/bookings/${encodeURIComponent(bookingId)}/print/consent`}>Print consent form</Link>
           {plan && <Link className="button-quiet" target="_blank" rel="noreferrer" href={`/admin/bookings/${encodeURIComponent(bookingId)}/print/payment-plan`}>Print payment plan</Link>}
@@ -279,17 +280,17 @@ export default function AdminBookingDocumentsAndPayments({
         {error && <p className="mt-4 text-sm text-rust" role="alert">{error}</p>}
         {plan ? (
           <>
-            <dl className="mt-5 grid gap-5 border-y border-ink/10 py-5 sm:grid-cols-4">
-              <div><dt className="eyebrow">Total price</dt><dd className="mt-2 text-sm">{amountLabel(plan.totalAmount, plan.currency)}</dd></div>
-              <div><dt className="eyebrow">Paid to date</dt><dd className="mt-2 text-sm">{amountLabel(plan.amountPaid, plan.currency)}</dd></div>
-              <div><dt className="eyebrow">Remaining balance</dt><dd className="mt-2 text-sm">{amountLabel(plan.remainingBalance, plan.currency)}</dd></div>
-              <div><dt className="eyebrow">Payment status</dt><dd className="mt-2 text-sm capitalize">{plan.status.toLowerCase().replaceAll("_", " ")}</dd></div>
+            <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5 border-y border-ink/10 py-5 sm:grid-cols-3 lg:grid-cols-4">
+              <div><dt className="eyebrow">Total price</dt><dd className="mt-2 text-sm tabular-nums">{amountLabel(plan.totalAmount, plan.currency)}</dd></div>
+              <div><dt className="eyebrow">Paid to date</dt><dd className="mt-2 text-sm tabular-nums">{amountLabel(plan.amountPaid, plan.currency)}</dd></div>
+              <div><dt className="eyebrow">Remaining balance</dt><dd className="mt-2 text-sm font-semibold tabular-nums">{amountLabel(plan.remainingBalance, plan.currency)}</dd></div>
+              <div><dt className="eyebrow">Payment status</dt><dd className="mt-2"><StatusBadge status={plan.status} /></dd></div>
               <div><dt className="eyebrow">Payment frequency</dt><dd className="mt-2 text-sm capitalize">{plan.frequency.toLowerCase()}</dd></div>
               <div><dt className="eyebrow">Installments</dt><dd className="mt-2 text-sm">{plan.installmentCount}</dd></div>
             </dl>
-            <div className="mt-6 overflow-x-auto">
+            <div className="mt-6 overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-rust" tabIndex={0} role="region" aria-label="Installment schedule">
               <h3 className="eyebrow mb-3">Installment schedule</h3>
-              <table className="w-full min-w-[600px] border-collapse text-left text-xs">
+              <table className="data-table min-w-[600px] text-xs">
                 <thead><tr className="border-b border-ink/15 text-[10px] uppercase tracking-[.12em] text-ink/50">
                   <th className="py-3 pr-3">Installment</th><th className="py-3 pr-3">Due date</th><th className="py-3 pr-3">Amount</th><th className="py-3 pr-3">Paid</th><th className="py-3 pr-3">Remaining</th><th className="py-3">Status</th>
                 </tr></thead>
@@ -300,15 +301,15 @@ export default function AdminBookingDocumentsAndPayments({
                     <td className="py-3 pr-3">{amountLabel(item.amount, plan.currency)}</td>
                     <td className="py-3 pr-3">{amountLabel(item.amountPaid, plan.currency)}</td>
                     <td className="py-3 pr-3">{amountLabel(item.remaining, plan.currency)}</td>
-                    <td className="py-3 capitalize">{item.status.toLowerCase().replaceAll("_", " ")}</td>
+                    <td><StatusBadge status={item.status} /></td>
                   </tr>
                 ))}</tbody>
               </table>
             </div>
-            <div className="mt-6 overflow-x-auto">
+            <div className="mt-6 overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-rust" tabIndex={0} role="region" aria-label="Payment history">
               <h3 className="eyebrow mb-3">Payment ledger</h3>
               {!plan.payments.length ? <p className="text-sm text-ink/55">No payments recorded.</p> : (
-                <table className="w-full min-w-[760px] border-collapse text-left text-xs">
+                <table className="data-table min-w-[760px] text-xs">
                   <thead><tr className="border-b border-ink/15 text-[10px] uppercase tracking-[.12em] text-ink/50">
                     <th className="py-3 pr-3">Payment</th><th className="py-3 pr-3">Amount</th><th className="py-3 pr-3">Date</th><th className="py-3 pr-3">Method</th><th className="py-3 pr-3">Recorded by</th><th className="py-3 pr-3">Reference / notes</th><th className="py-3">Receipt</th>
                   </tr></thead>
@@ -327,7 +328,7 @@ export default function AdminBookingDocumentsAndPayments({
               )}
             </div>
             {openInstallments.length > 0 && (
-              <form onSubmit={submitPayment} className="mt-8 border border-ink/15 bg-white/25 p-5 sm:p-6">
+              <form onSubmit={submitPayment} className="surface-card mt-8 border-ink/10 bg-white/35 p-5 sm:p-6">
                 <h3 className="font-display text-2xl">Record payment</h3>
                 <p className="mt-2 text-xs text-ink/55">Payments are manually recorded. This does not change the booking status.</p>
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -359,7 +360,7 @@ export default function AdminBookingDocumentsAndPayments({
             )}
           </>
         ) : !planLoading ? (
-          <form onSubmit={submitPlan} className="mt-5 border border-ink/15 bg-white/25 p-5 sm:p-6">
+          <form onSubmit={submitPlan} className="surface-card mt-5 border-ink/10 bg-white/35 p-5 sm:p-6">
             <h3 className="font-display text-2xl">Create payment plan</h3>
             <p className="mt-2 text-xs text-ink/55">Record only money already received. Future installments are generated against the remaining balance.</p>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -459,13 +460,13 @@ export default function AdminBookingDocumentsAndPayments({
       <section className="border-t border-ink/15 pt-8">
         <h2 className="font-display text-3xl">Client record & consent</h2>
         <p className="mt-2 text-xs text-ink/55">Government ID numbers are not collected. Store only the ID type and last four digits when needed.</p>
-        <p className="mt-2 text-xs text-ink/55">Consent status: <strong className="capitalize">{consentStatus.toLowerCase().replaceAll("_", " ")}</strong>{consentRecord?.completedAt ? ` · completed ${shortDate(consentRecord.completedAt)}` : ""}</p>
+        <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink/65">Consent status: <StatusBadge status={consentStatus} />{consentRecord?.completedAt ? ` · completed ${shortDate(consentRecord.completedAt)}` : ""}</p>
         {consentRecord?.identificationVerifiedAt && (
           <p className="mt-2 text-xs text-ink/55">
             Identification verified by {consentRecord.verifiedByName || "Admin"} on {shortDate(consentRecord.identificationVerifiedAt)}.
           </p>
         )}
-        <form onSubmit={(event) => { event.preventDefault(); void saveConsent(); }} className="mt-5 border border-ink/15 bg-white/25 p-5 sm:p-6">
+        <form onSubmit={(event) => { event.preventDefault(); void saveConsent(); }} className="surface-card mt-5 border-ink/10 bg-white/35 p-5 sm:p-6">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="grid gap-2 text-xs">Legal name<input maxLength={160} value={legalName} onChange={(event) => setLegalName(event.target.value)} className="border border-ink/20 bg-transparent p-3" /></label>
             <label className="grid gap-2 text-xs">Date of birth<input type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} className="border border-ink/20 bg-transparent p-3" /></label>
@@ -475,7 +476,7 @@ export default function AdminBookingDocumentsAndPayments({
             <label className="grid gap-2 text-xs">ZIP / postal code<input maxLength={20} value={postalCode} onChange={(event) => setPostalCode(event.target.value)} className="border border-ink/20 bg-transparent p-3" /></label>
             <label className="grid gap-2 text-xs">Government ID type<input maxLength={80} value={governmentIdType} onChange={(event) => setGovernmentIdType(event.target.value)} className="border border-ink/20 bg-transparent p-3" /></label>
             <label className="grid gap-2 text-xs">ID last four digits only<input inputMode="numeric" pattern="[0-9]{4}" maxLength={4} value={governmentIdLastFour} onChange={(event) => setGovernmentIdLastFour(event.target.value)} className="border border-ink/20 bg-transparent p-3" /></label>
-            <label className="flex items-center gap-3 text-xs sm:col-span-2"><input type="checkbox" checked={identificationVerified} onChange={(event) => setIdentificationVerified(event.target.checked)} />I verified the identification in person</label>
+            <label className="flex min-h-11 items-center gap-3 text-xs sm:col-span-2"><input className="field-checkbox" type="checkbox" checked={identificationVerified} onChange={(event) => setIdentificationVerified(event.target.checked)} />I verified the identification in person</label>
             <label className="grid gap-2 text-xs">Assigned artist / tattooer<input maxLength={160} value={assignedArtist} onChange={(event) => setAssignedArtist(event.target.value)} className="border border-ink/20 bg-transparent p-3" /></label>
             <p className="text-xs text-ink/55 sm:col-span-2">Client contact on file: {email}{phone ? ` · ${phone}` : ""}.</p>
           </div>

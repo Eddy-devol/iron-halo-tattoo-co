@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import AdminHeader from "@/components/admin/AdminHeader";
+import StatusBadge from "@/components/StatusBadge";
 
 const statuses = [
   "PENDING",
@@ -30,7 +31,7 @@ type BookingListResponse = {
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
 };
 
-const fieldClass = "min-w-0 border border-ink/20 bg-transparent px-4 py-3 text-sm text-ink outline-none focus:border-rust";
+const fieldClass = "field-control field-control-light min-w-0";
 
 function formatStatus(status: string) {
   return status.toLowerCase().replaceAll("_", " ");
@@ -81,7 +82,7 @@ export default function AdminBookingsDashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f1ede5] text-ink">
+    <main className="admin-light min-h-screen bg-[#f1ede5] text-ink">
       <AdminHeader />
       <div className="mx-auto max-w-6xl px-6 py-12 sm:py-16">
         <p className="eyebrow">Studio console</p>
@@ -118,7 +119,7 @@ export default function AdminBookingsDashboard() {
           <button type="submit" className="button-primary px-6">Search</button>
         </form>
 
-        <section className="mt-7 border border-ink/15 bg-white/30" aria-label="Booking requests">
+        <section className="surface-card mt-7 border-ink/10 bg-white/35" aria-label="Booking requests">
           {loading ? (
             <p className="px-6 py-12 text-sm text-ink/55" role="status">Loading booking requests…</p>
           ) : error ? (
@@ -133,32 +134,32 @@ export default function AdminBookingsDashboard() {
             <p className="px-6 py-12 text-sm text-ink/55">No booking requests match your search.</p>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[700px] border-collapse text-left">
+              <div className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-rust" tabIndex={0} aria-label="Scrollable booking requests table">
+                <table className="data-table min-w-[700px]">
                   <thead className="border-b border-ink/15 text-[10px] uppercase tracking-[.16em] text-ink/50">
                     <tr>
-                      <th className="px-5 py-4 font-semibold">Request</th>
-                      <th className="px-5 py-4 font-semibold">Contact</th>
-                      <th className="px-5 py-4 font-semibold">Status</th>
-                      <th className="px-5 py-4 font-semibold">Received</th>
-                      <th className="px-5 py-4"><span className="sr-only">Open</span></th>
+                      <th>Request</th>
+                      <th>Contact</th>
+                      <th>Status</th>
+                      <th>Received</th>
+                      <th><span className="sr-only">Open</span></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-ink/10">
                     {result.bookings.map((booking) => (
-                      <tr key={booking.id} className="hover:bg-white/40">
-                        <td className="px-5 py-4">
-                          <p className="text-xs uppercase tracking-[.12em] text-rust">{booking.referenceNumber}</p>
+                      <tr key={booking.id}>
+                        <td>
+                          <p className="text-xs uppercase tracking-[.12em] text-ink/65">{booking.referenceNumber}</p>
                           <p className="mt-1 font-medium">{booking.fullName}</p>
                         </td>
-                        <td className="px-5 py-4 text-sm">
+                        <td>
                           <p>{booking.email}</p>
-                          {booking.phone && <p className="mt-1 text-xs text-ink/50">{booking.phone}</p>}
+                          {booking.phone && <p className="mt-1 text-xs text-ink/60">{booking.phone}</p>}
                         </td>
-                        <td className="px-5 py-4 text-sm capitalize">{formatStatus(booking.status)}</td>
-                        <td className="px-5 py-4 text-sm text-ink/60">{formatDate(booking.createdAt)}</td>
-                        <td className="px-5 py-4 text-right">
-                          <Link href={`/admin/bookings/${booking.id}`} className="text-xs uppercase tracking-[.14em] text-rust hover:underline">View</Link>
+                        <td><StatusBadge status={booking.status} /></td>
+                        <td className="whitespace-nowrap text-ink/70">{formatDate(booking.createdAt)}</td>
+                        <td className="text-right">
+                          <Link href={`/admin/bookings/${booking.id}`} className="nav-link inline-flex min-h-11 items-center text-xs uppercase tracking-[.12em] text-ink/75">View <span className="link-arrow ml-1" aria-hidden="true">↗</span></Link>
                         </td>
                       </tr>
                     ))}

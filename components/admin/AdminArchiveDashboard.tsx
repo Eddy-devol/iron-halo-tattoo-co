@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AdminHeader from "@/components/admin/AdminHeader";
+import StatusBadge from "@/components/StatusBadge";
 import type { ArchiveArtwork } from "@/components/admin/archive-types";
 
 export default function AdminArchiveDashboard() {
@@ -52,7 +53,7 @@ export default function AdminArchiveDashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f1ede5] text-ink">
+    <main className="admin-light min-h-screen bg-[#f1ede5] text-ink">
       <AdminHeader />
       <div className="mx-auto max-w-6xl px-6 py-12 sm:py-16">
         <p className="eyebrow">Studio console</p>
@@ -64,38 +65,38 @@ export default function AdminArchiveDashboard() {
           <Link href="/admin/archive/new" className="button-primary px-6">Add artwork</Link>
         </div>
 
-        {message && <p className="mt-6 border border-ink/15 bg-white/40 px-4 py-3 text-sm" role="status">{message}</p>}
-        {error && <p className="mt-6 border border-rust/40 bg-rust/5 px-4 py-3 text-sm text-rust" role="alert">{error}</p>}
+        {message && <p className="surface-card mt-6 border-ink/10 bg-white/45 px-4 py-3 text-sm" role="status">{message}</p>}
+        {error && <p className="mt-6 border border-rust/35 bg-rust/5 px-4 py-3 text-sm text-[#773c2f]" role="alert">{error}</p>}
 
         <section className="mt-8" aria-label="Archive artwork">
           {loading ? (
-            <p className="border border-ink/15 bg-white/30 px-6 py-12 text-sm text-ink/55" role="status">Loading artwork…</p>
+            <p className="surface-card border-ink/10 bg-white/35 px-6 py-12 text-sm text-ink/65" role="status">Loading artwork…</p>
           ) : error && !artworks.length ? (
-            <div className="border border-ink/15 bg-white/30 px-6 py-12">
+            <div className="surface-card border-ink/10 bg-white/35 px-6 py-12">
               <button type="button" className="text-xs uppercase tracking-[.16em] underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-rust" onClick={() => void loadArtworks()}>
                 Try again
               </button>
             </div>
           ) : !artworks.length ? (
-            <p className="border border-ink/15 bg-white/30 px-6 py-12 text-sm text-ink/55">The Archive is empty. Add the first artwork when ready.</p>
+            <p className="surface-card border-ink/10 bg-white/35 px-6 py-12 text-sm text-ink/65">The Archive is empty. Add the first artwork when ready.</p>
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {artworks.map((artwork) => (
-                <article key={artwork.id} className="overflow-hidden border border-ink/15 bg-white/40">
-                  <div className="relative aspect-[4/5] bg-ink/10">
+                <article key={artwork.id} className="group overflow-hidden border border-ink/10 bg-white/35 transition-colors duration-200 hover:bg-white/55">
+                  <div className="image-frame aspect-[4/5] bg-ink/10">
                     <Image
                       src={artwork.imageUrl}
                       alt={artwork.altText}
                       fill
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       unoptimized
-                      className="object-cover"
+                      className="artwork-image group-hover:scale-[1.02]"
                     />
                   </div>
                   <div className="p-5">
-                    <div className="flex flex-wrap gap-2 text-[9px] uppercase tracking-[.15em]">
-                      <span className={artwork.published ? "text-emerald-800" : "text-ink/45"}>{artwork.published ? "Published" : "Unpublished"}</span>
-                      {artwork.featured && <span className="text-rust">Featured</span>}
+                    <div className="flex flex-wrap gap-2">
+                      <StatusBadge status={artwork.published ? "PUBLISHED" : "UNPUBLISHED"} />
+                      {artwork.featured && <StatusBadge status="FEATURED" />}
                     </div>
                     <h2 className="mt-3 font-display text-3xl">{artwork.title}</h2>
                     {artwork.style && <p className="mt-1 text-xs uppercase tracking-[.14em] text-rust">{artwork.style}</p>}

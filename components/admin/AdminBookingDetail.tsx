@@ -5,6 +5,7 @@ import { BookingStatus } from "@prisma/client";
 import { FormEvent, useEffect, useState } from "react";
 import AdminHeader from "@/components/admin/AdminHeader";
 import AdminBookingDocumentsAndPayments from "@/components/admin/AdminBookingDocumentsAndPayments";
+import StatusBadge from "@/components/StatusBadge";
 
 const bookingStatuses = Object.values(BookingStatus);
 
@@ -168,10 +169,10 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
   }
 
   return (
-    <main className="min-h-screen bg-[#f1ede5] text-ink">
+    <main className="admin-light min-h-screen bg-[#f1ede5] text-ink">
       <AdminHeader />
-      <div className="mx-auto max-w-4xl px-6 py-12 sm:py-16">
-        <Link href="/admin" className="text-[10px] uppercase tracking-[.18em] text-ink/55 hover:text-rust">← All booking requests</Link>
+      <div className="mx-auto max-w-4xl px-5 py-10 sm:px-6 sm:py-16">
+        <Link href="/admin" className="nav-link inline-flex min-h-11 items-center text-[10px] uppercase tracking-[.16em] text-ink/60">← All booking requests</Link>
         {loading ? (
           <p className="mt-12 text-sm text-ink/55" role="status">Loading booking details…</p>
         ) : error ? (
@@ -184,13 +185,13 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
             <div className="mt-8 border-b border-ink/15 pb-7">
               <p className="eyebrow">{booking.referenceNumber}</p>
               <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-                <h1 className="font-display text-5xl sm:text-6xl">{booking.fullName}</h1>
-                <p className="pb-2 text-sm capitalize text-ink/55">{formatStatus(booking.status)}</p>
+                <h1 className="font-display text-4xl sm:text-6xl">{booking.fullName}</h1>
+                <StatusBadge status={booking.status} />
               </div>
               <p className="mt-4 text-xs text-ink/50">Received {formatDate(booking.createdAt)}</p>
             </div>
 
-            <section className="mt-8 border border-ink/15 bg-white/30 p-5 sm:p-6">
+            <section className="surface-card mt-8 border-ink/10 bg-white/35 p-5 sm:p-6">
               <h2 className="font-display text-3xl">Booking status</h2>
               <form onSubmit={handleStatusSubmit} className="mt-4 flex flex-wrap items-end gap-3">
                 <label className="grid gap-2 text-[10px] font-semibold uppercase tracking-[.18em] text-ink/55">
@@ -199,7 +200,7 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
                     value={selectedStatus}
                     onChange={(event) => setSelectedStatus(event.target.value as BookingStatus)}
                     disabled={statusSaving}
-                    className="min-w-56 border border-ink/20 bg-[#f1ede5] px-3 py-3 text-sm font-normal normal-case tracking-normal text-ink"
+                    className="field-control field-control-light min-w-56 font-normal normal-case tracking-normal"
                   >
                     {bookingStatuses.map((status) => (
                       <option key={status} value={status}>{formatStatus(status)}</option>
@@ -209,7 +210,7 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
                 <button
                   type="submit"
                   disabled={statusSaving || selectedStatus === booking.status}
-                  className="border border-ink bg-ink px-5 py-3 text-[10px] uppercase tracking-[.16em] text-white disabled:cursor-not-allowed disabled:opacity-45"
+                  className="button-primary !min-h-11 !border-ink !bg-ink !px-5 !py-3 !text-[10px] !tracking-[.14em] !text-bone disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {statusSaving ? "Saving…" : "Save status"}
                 </button>
@@ -238,13 +239,13 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
                   rows={4}
                   disabled={noteSaving}
                   placeholder="Write an internal note…"
-                  className="w-full border border-ink/20 bg-white/40 p-4 text-sm leading-6 text-ink placeholder:text-ink/40"
+                  className="field-control field-control-light min-h-32 resize-y py-3 leading-6"
                 />
                 {noteError && <p className="mt-2 text-sm text-rust" role="alert">{noteError}</p>}
                 <button
                   type="submit"
                   disabled={noteSaving || !noteDraft.trim()}
-                  className="mt-3 border border-ink bg-ink px-5 py-3 text-[10px] uppercase tracking-[.16em] text-white disabled:cursor-not-allowed disabled:opacity-45"
+                  className="button-primary mt-3 !min-h-11 !border-ink !bg-ink !px-5 !py-3 !text-[10px] !tracking-[.14em] !text-bone disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {noteSaving ? "Adding note…" : "Add internal note"}
                 </button>
@@ -273,8 +274,10 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
                 <ol className="mt-5 divide-y divide-ink/10 border-y border-ink/10">
                   {booking.statusHistory.map((change) => (
                     <li key={change.id} className="py-4">
-                      <p className="text-sm capitalize">
-                        {formatStatus(change.previousStatus)} <span aria-hidden="true">→</span> {formatStatus(change.newStatus)}
+                      <p className="flex flex-wrap items-center gap-2 text-sm">
+                        <StatusBadge status={change.previousStatus} />
+                        <span aria-hidden="true" className="text-ink/45">→</span>
+                        <StatusBadge status={change.newStatus} />
                       </p>
                       <p className="mt-2 text-xs text-ink/50">{change.actorName} · {formatDate(change.createdAt)}</p>
                     </li>
@@ -309,7 +312,7 @@ export default function AdminBookingDetail({ bookingId }: { bookingId: string })
                         <p className="text-sm">{image.originalFilename}</p>
                         <p className="mt-1 text-xs text-ink/50">{image.mimeType} · {(image.fileSize / 1024 / 1024).toFixed(1)} MB</p>
                       </div>
-                      <a href={image.url} target="_blank" rel="noreferrer" className="text-xs uppercase tracking-[.14em] text-rust hover:underline">Open image</a>
+                      <a href={image.url} target="_blank" rel="noreferrer" className="nav-link inline-flex min-h-11 items-center text-xs uppercase tracking-[.12em] text-ink/75">Open image <span className="link-arrow ml-1" aria-hidden="true">↗</span></a>
                     </li>
                   ))}
                 </ul>

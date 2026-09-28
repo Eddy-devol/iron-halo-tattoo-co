@@ -5,10 +5,12 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#11110f",
-        bone: "#e8e2d6",
-        rust: "#ad4c32",
-        ash: "#989187"
+        ink: "rgb(var(--color-ink) / <alpha-value>)",
+        bone: "rgb(var(--color-bone) / <alpha-value>)",
+        rust: "rgb(var(--color-rust) / <alpha-value>)",
+        ash: "rgb(var(--color-ash) / <alpha-value>)",
+        silver: "rgb(var(--color-silver) / <alpha-value>)",
+        graphite: "rgb(var(--color-graphite) / <alpha-value>)"
       },
       fontFamily: {
         display: ["var(--font-cormorant)", "Georgia", "serif"],

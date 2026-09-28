@@ -1,6 +1,7 @@
 import React from "react";
 import type { ClientPortalBooking } from "@/lib/server/client-portal";
 import PortalPrintButton from "@/components/portal/PortalPrintButton";
+import StatusBadge from "@/components/StatusBadge";
 
 type DocumentType = "confirmation" | "consent" | "payment-plan" | "client-packet" | "receipt";
 
@@ -51,7 +52,7 @@ function Consent({ booking }: { booking: ClientPortalBooking }) {
   return (
     <section className="document-page">
       <Header title="Tattoo Procedure Consent" booking={booking} />
-      <p className="document-notice">Consent status: <strong>{consent.status === "COMPLETED" ? "Completed" : "Not completed"}</strong></p>
+      <p className="document-notice flex items-center gap-2">Consent status: <StatusBadge status={consent.status} /></p>
       <p className="document-notice">
         {consent.status === "COMPLETED"
           ? "Consent completed."
@@ -87,7 +88,7 @@ function PaymentPlan({ booking }: { booking: ClientPortalBooking }) {
     <section className="document-page">
       <Header title="Payment Plan" booking={booking} />
       <section className="document-section"><h2>Payment summary</h2><dl className="document-grid">
-        <Field label="Status" value={plan.status.replaceAll("_", " ")} />
+        <div className="document-field"><dt>Status</dt><dd><StatusBadge status={plan.status} /></dd></div>
         <Field label="Total" value={amount(plan.totalAmount, plan.currency)} />
         <Field label="Paid to date" value={amount(plan.amountPaid, plan.currency)} />
         <Field label="Remaining" value={amount(plan.remainingBalance, plan.currency)} />
